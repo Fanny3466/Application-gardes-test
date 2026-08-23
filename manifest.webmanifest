@@ -1,13 +1,15 @@
 {
-  "name": "Application Gardes",
+  "id": "./",
+  "name": "Application Gardes V2",
   "short_name": "Gardes",
-  "description": "Saisie des disponibilités, remplaçants, consultation de la garde et vue Chef/Adjoint.",
+  "description": "Disponibilités, remplaçants, feuille de garde et pilotage Chef/Adjoint.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#F4F7FB",
+  "background_color": "#F3F7FB",
   "theme_color": "#0B5CAB",
   "lang": "fr-FR",
+  "orientation": "portrait-primary",
   "icons": [
     {
       "src": "assets/icon-192.png",

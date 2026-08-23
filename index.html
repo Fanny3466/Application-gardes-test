@@ -1,198 +1,209 @@
 <!doctype html>
 <html lang="fr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="theme-color" content="#0B5CAB">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Gardes">
-<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<link rel="manifest" href="manifest.webmanifest">
-<title>Application Gardes</title>
-<style>
-:root{
-  --blue:#0B5CAB;--blue2:#0A4C8F;--bg:#F4F7FB;--card:#fff;--ink:#17212B;--muted:#6F7E8B;
-  --line:#DFE7EF;--ok:#DFF5E4;--no:#FFE0E0;--busy:#FFF0C4;--special:#E8E2FF;--shadow:0 8px 28px rgba(16,52,84,.10)
-}
-*{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink)}
-body{padding-bottom:calc(78px + env(safe-area-inset-bottom))}
-button,select{font:inherit}
-.hidden{display:none!important}
-.top{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-top))}
-.brand{display:flex;align-items:center;gap:10px}.brand img{width:40px;height:40px;border-radius:12px}.brand b{display:block}.brand small{color:var(--muted)}
-.main{max-width:760px;margin:auto;padding:14px}
-.hero{background:linear-gradient(135deg,var(--blue),#2C8DDC);color:#fff;border-radius:24px;padding:20px;box-shadow:var(--shadow);display:flex;justify-content:space-between;gap:12px}
-.hero h1{font-size:25px;line-height:1.05;margin:4px 0 10px}.hero p{margin:0;opacity:.9;font-size:13px}.hero .emoji{font-size:52px}
-.pill{display:inline-block;padding:6px 9px;border-radius:999px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);font-size:11px;font-weight:700}
-.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;box-shadow:0 4px 18px rgba(16,52,84,.06);margin-top:12px}
-.card h2{font-size:17px;margin:0 0 10px}.label{font-size:11px;text-transform:uppercase;color:var(--muted);font-weight:800;letter-spacing:.05em}
-select{width:100%;padding:13px;border:1px solid var(--line);border-radius:13px;background:#fff;margin-top:6px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
-.shortcut{border:1px solid var(--line);background:#fff;border-radius:17px;padding:15px;text-align:left;min-height:116px;box-shadow:0 3px 14px rgba(16,52,84,.05)}
-.shortcut span{font-size:27px;display:block;margin-bottom:7px}.shortcut b{display:block}.shortcut small{color:var(--muted)}
-.head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:10px}.head h2{margin:3px 0 0}.eyebrow{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
-.tabs{display:flex;gap:7px;overflow:auto;padding-bottom:9px}.tab{flex:0 0 70px;border:1px solid var(--line);background:#fff;border-radius:14px;padding:9px}.tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
-.tip{display:flex;gap:9px;background:#EAF5FF;border:1px solid #CFE7FC;border-radius:14px;padding:10px 12px;font-size:13px;margin-bottom:10px}
-.slots{display:grid;gap:8px}.slot{width:100%;border:1px solid var(--line);border-radius:15px;padding:11px 12px;background:#fff;display:grid;grid-template-columns:78px 1fr 18px;align-items:center;text-align:left}
-.slot.ok{background:var(--ok)}.slot.no{background:var(--no)}.slot.busy{background:var(--busy)}.slot.special{background:var(--special)}.slot b{display:block}.slot small{color:var(--muted)}
-.vehicles{display:grid;gap:10px}.vehicle{border-radius:16px;overflow:hidden;border:1px solid rgba(0,0,0,.08)}.vehicle h3{margin:0;padding:9px 11px;background:rgba(255,255,255,.4);font-size:14px}.crew div{display:grid;grid-template-columns:88px 1fr;gap:8px;padding:8px 11px;border-top:1px solid rgba(0,0,0,.08)}.crew span{font-size:11px}.crew b{font-size:13px}
-.vsav{background:#FFF200}.fpt{background:#BFD68D}.vlsm{background:#4B90C9}.vpf{background:#F59645}.epsa{background:#C8BE99}.ccf{background:#8FD447}.cpce{background:#FFF8C3}.stat{background:#CBDCEC}
-.nav{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;justify-content:space-around;background:rgba(255,255,255,.96);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:8px 4px calc(8px + env(safe-area-inset-bottom))}
-.nav button{border:0;background:transparent;color:#6C7B88;min-width:60px;padding:4px}.nav button.active{color:var(--blue);font-weight:800}.nav span{display:block;font-size:20px}.nav small{font-size:10px}
-.screen{display:none}.screen.active{display:block}
-dialog{border:0;border-radius:22px;padding:18px;width:min(92vw,460px);box-shadow:0 24px 70px rgba(0,0,0,.28)}dialog::backdrop{background:rgba(0,0,0,.35);backdrop-filter:blur(3px)}
-.dialoglist{display:grid;gap:8px;max-height:58vh;overflow:auto}.dialoglist button{border:1px solid var(--line);background:#fff;border-radius:13px;padding:12px;text-align:left}
-.close{float:right;border:0;background:#EEF3F7;border-radius:999px;width:34px;height:34px;font-size:20px}
-.install{background:#FFF8D6;border:1px solid #F2D879;border-radius:14px;padding:11px 12px;margin-top:12px;font-size:13px}
-.btn{border:0;border-radius:13px;padding:11px 13px;background:#EEF3F7;font-weight:800}.btn.primary{background:var(--blue);color:#fff}
-.row{display:flex;gap:8px;flex-wrap:wrap}
-.matrix{overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px}.matrix table{border-collapse:collapse;min-width:650px;width:100%}.matrix th,.matrix td{padding:7px;border-bottom:1px solid #EDF1F5;text-align:center;font-size:11px}.matrix th:first-child,.matrix td:first-child{text-align:left;position:sticky;left:0;background:#fff}
-.badge-ok{background:var(--ok);border-radius:8px;padding:5px}.badge-no{background:var(--no);border-radius:8px;padding:5px}.badge-busy{background:var(--busy);border-radius:8px;padding:5px}
-@media(min-width:720px){.grid{grid-template-columns:repeat(3,1fr)}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0B5CAB">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Gardes">
+  <meta name="format-detection" content="telephone=no">
+  <title>Application Gardes V2</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="icon" href="assets/icon-192.png">
+  <link rel="stylesheet" href="styles.css?v=2.0.0">
+  <script src="config.js?v=2.0.0" defer></script>
+  <script src="profile.js?v=2.0.0" defer></script>
+  <script src="repositories.js?v=2.0.0" defer></script>
+  <script src="app.js?v=2.0.0" defer></script>
 </head>
 <body>
-<header class="top">
-  <div class="brand">
+  <div id="loader" class="loader hidden"><div><div class="loader-spin"></div><small id="loaderText">Synchronisation…</small></div></div>
+  <div id="toast" class="toast"></div>
+
+  <section id="loginScreen" class="login-screen hidden">
     <img src="assets/icon-192.png" alt="">
-    <div><b>Application Gardes</b><small>Version test iPhone · GARDE 3</small></div>
+    <h1>Application Gardes</h1>
+    <p>Connecte-toi avec ton compte professionnel pour accéder à tes disponibilités et à la feuille de garde.</p>
+    <button id="btnMicrosoftLogin" class="btn primary">Se connecter avec Microsoft 365</button>
+  </section>
+
+  <div id="appShell" class="hidden">
+    <header class="app-top">
+      <div class="brand">
+        <img src="assets/icon-192.png" alt="">
+        <div class="brand-text">
+          <strong>Application Gardes</strong>
+          <small><span id="versionText">V2</span> · <span id="teamText">GARDE 3</span> · <span><i id="envDot" class="env-dot"></i> <span id="envText">TEST</span></span></small>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button id="btnRefreshTop" class="icon-btn" aria-label="Actualiser">↻</button>
+        <button id="btnUser" class="avatar-btn" aria-label="Compte">FC</button>
+      </div>
+    </header>
+
+    <div class="connection-bar">
+      <span class="connection-state"><i id="onlineDot" class="online-dot"></i><span id="connectionText">En ligne</span></span>
+      <button id="btnSyncMini" class="sync-mini">Dernière synchro : —</button>
+    </div>
+
+    <main class="shell">
+      <section id="screen-home" class="screen active">
+        <div class="hero">
+          <div>
+            <span id="modePill" class="mode-pill">MODE DÉMONSTRATION</span>
+            <h1>Ma garde sur mon téléphone</h1>
+            <p>Disponibilités, remplaçants, feuille de garde publiée et pilotage Chef / Adjoint.</p>
+          </div>
+          <div class="hero-art">🧑‍🚒</div>
+        </div>
+
+        <div id="agentCard" class="card">
+          <label class="label" for="agentSelect">Je suis</label>
+          <select id="agentSelect"></select>
+          <div id="agentMeta" class="agent-meta"></div>
+          <div id="installTip" class="install-tip hidden">
+            <span>📲</span>
+            <div><b>Installer sur iPhone</b><br>Safari → Partager → <b>Sur l’écran d’accueil</b>.</div>
+            <button id="dismissInstallTip" aria-label="Masquer">×</button>
+          </div>
+        </div>
+
+        <div class="shortcut-grid">
+          <button class="shortcut" data-screen="availability"><span class="emoji">📅</span><b>Mes dispos</b><small>Saisie tactile par plage</small></button>
+          <button class="shortcut" data-screen="guard"><span class="emoji">🚒</span><b>Prochaine garde</b><small>Feuille publiée</small></button>
+          <button id="shortcutChef" class="shortcut hidden" data-screen="chef"><span class="emoji">📊</span><b>Chef / Adjoint</b><small>Potentiel & contrôle</small></button>
+          <button id="shortcutAdmin" class="shortcut hidden" data-screen="admin"><span class="emoji">⚙️</span><b>Administration</b><small>Connexion & diagnostic</small></button>
+          <button class="shortcut" data-screen="help"><span class="emoji">💡</span><b>Guide</b><small>Mode d’emploi</small></button>
+        </div>
+      </section>
+
+      <section id="screen-availability" class="screen">
+        <div class="screen-head">
+          <div><span class="eyebrow">Saisie mobile</span><h2>Mes disponibilités</h2></div>
+          <div class="head-actions"><button id="btnWholeBlock" class="btn primary">✓ Toute la plage</button></div>
+        </div>
+
+        <div class="scroll-strip-wrap">
+          <div id="dayTabs" class="scroll-strip"></div>
+          <div class="scroll-fade"></div>
+          <button id="dayScrollArrow" class="scroll-arrow" aria-label="Voir les jours suivants">›</button>
+        </div>
+
+        <div id="blockTabs" class="block-tabs"></div>
+
+        <div class="progress-card">
+          <div class="progress-text"><b id="availabilityProgressLabel">Créneaux renseignés</b><span id="availabilityProgressText">—</span></div>
+          <div id="availabilityProgressPct" class="progress-ring">0%</div>
+        </div>
+
+        <div id="slotList" class="slot-list"></div>
+      </section>
+
+      <section id="screen-guard" class="screen">
+        <div class="screen-head">
+          <div><span class="eyebrow">Publication</span><h2>Feuille de garde</h2></div>
+          <div class="head-actions"><button id="btnGuardRefresh" class="btn">↻ Actualiser</button></div>
+        </div>
+        <div class="guard-toolbar">
+          <select id="guardDateSelect" aria-label="Date de garde"></select>
+          <select id="guardBlockSelect" aria-label="Plage horaire"></select>
+        </div>
+        <div id="guardPublishedInfo" class="progress-card">
+          <div class="progress-text"><b>Lecture seule agents</b><span id="guardPublicationText">Dernière publication : —</span></div>
+          <div>🔒</div>
+        </div>
+        <div id="guardGrid" class="guard-grid"></div>
+      </section>
+
+      <section id="screen-chef" class="screen">
+        <div class="screen-head">
+          <div><span class="eyebrow">Pilotage</span><h2>Chef / Adjoint</h2></div>
+          <div class="head-actions">
+            <button id="btnChefRefresh" class="btn">↻</button>
+            <button id="btnChefLock" class="btn">🔒 Verrouiller</button>
+            <button id="btnChefPublish" class="btn primary">Publier</button>
+          </div>
+        </div>
+        <div class="guard-toolbar">
+          <select id="chefDateSelect"></select>
+          <select id="chefBlockSelect"></select>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><h3>Potentiel opérationnel / heure</h3><span id="lockBadge" class="meta-chip">Non verrouillé</span></div>
+          <div id="potentialStrip" class="potential-strip"></div>
+        </div>
+
+        <div class="legend">
+          <span><i style="background:var(--green)"></i>Disponible</span>
+          <span><i style="background:var(--red)"></i>Indisponible</span>
+          <span><i style="background:var(--amber)"></i>Travail / formation</span>
+          <span><i style="background:var(--purple)"></i>GFF / GRR</span>
+          <span><i style="background:#E7F2FF"></i>Remplaçant</span>
+        </div>
+
+        <div class="matrix-wrap"><table id="chefMatrix" class="matrix"></table></div>
+      </section>
+
+      <section id="screen-admin" class="screen">
+        <div class="screen-head"><div><span class="eyebrow">Administration</span><h2>Diagnostic V2</h2></div></div>
+        <div id="adminStats" class="admin-grid"></div>
+        <div class="card">
+          <div class="card-title"><h3>État des connexions</h3><button id="btnRunDiagnostics" class="btn">Tester</button></div>
+          <div id="diagnosticList" class="diagnostic-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><h3>Maintenance locale</h3></div>
+          <div class="head-actions" style="justify-content:flex-start">
+            <button id="btnClearDemoData" class="btn danger">Effacer les données de test</button>
+            <button id="btnLogout" class="btn">Déconnexion</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-help" class="screen">
+        <div class="screen-head"><div><span class="eyebrow">Guide</span><h2>Comment utiliser l’application ?</h2></div></div>
+        <div class="help">
+          <details open><summary>1 · Identification de l’agent</summary><p>En mode Microsoft 365, l’application recherche automatiquement l’adresse du compte connecté dans la liste <b>Agents</b>. L’agent ne voit alors que ses propres disponibilités.</p></details>
+          <details><summary>2 · Saisir les disponibilités</summary><p>Choisis le jour puis la plage horaire. Touche chaque heure ou utilise <b>Toute la plage</b>. Les statuts correspondent aux valeurs reconnues par le classeur Excel.</p></details>
+          <details><summary>3 · Déclarer un remplaçant</summary><p>Choisis <b>Remplaçant</b>, puis la personne concernée. Son code et son nom sont enregistrés dans SharePoint afin que le module VBA puisse les reprendre dans <b>Demande dispo</b>.</p></details>
+          <details><summary>4 · Feuille de garde</summary><p>La vue <b>Garde</b> lit les affectations publiées par le classeur. Les postes non pourvus restent visibles si l’option correspondante est activée.</p></details>
+          <details><summary>5 · Chef de garde / Adjoint</summary><p>La matrice conserve la première colonne et les heures pendant le défilement. Les actions <b>Verrouiller</b>, <b>Publier</b> et <b>Actualiser</b> sont reliées aux listes SharePoint en mode Microsoft 365.</p></details>
+          <details><summary>6 · Installer sur iPhone</summary><p>Ouvre l’application dans Safari → <b>Partager</b> → <b>Sur l’écran d’accueil</b>. Le bandeau d’installation disparaît automatiquement lorsque l’application est déjà ouverte en mode autonome.</p></details>
+          <details><summary>7 · Chaîne de synchronisation</summary><ol><li>iPhone → liste <b>Disponibilites</b>.</li><li>Power Automate → module VBA.</li><li>VBA → <b>Demande dispo</b> puis calcul de la garde.</li><li>Excel → liste <b>Affectations</b>.</li><li>Application → affichage de la garde publiée.</li></ol></details>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav">
+      <button class="nav-btn active" data-screen="home"><span>⌂</span><small>Accueil</small></button>
+      <button class="nav-btn" data-screen="availability"><span>📅</span><small>Dispos</small></button>
+      <button class="nav-btn" data-screen="guard"><span>🚒</span><small>Garde</small></button>
+      <button id="navChef" class="nav-btn hidden" data-screen="chef"><span>📊</span><small>Chef</small></button>
+      <button id="navAdmin" class="nav-btn hidden" data-screen="admin"><span>⚙</span><small>Admin</small></button>
+      <button class="nav-btn" data-screen="help"><span>?</span><small>Aide</small></button>
+    </nav>
   </div>
-</header>
 
-<main class="main">
-<section id="home" class="screen active">
-  <div class="hero">
-    <div><span class="pill">MODE DÉMONSTRATION</span><h1>Ma garde sur mon téléphone</h1><p>Saisie des disponibilités, remplaçants et consultation de la prochaine garde.</p></div>
-    <div class="emoji">🧑‍🚒</div>
-  </div>
+  <dialog id="statusDialog">
+    <button class="dialog-close" data-close="statusDialog">×</button>
+    <h3>Choisir le statut</h3>
+    <div id="statusDialogList" class="dialog-list"></div>
+  </dialog>
 
-  <div class="card">
-    <div class="label">Je suis</div>
-    <select id="agentSelect"></select>
-    <div class="install"><b>Pour tester comme une vraie app sur iPhone :</b><br>ouvre cette page dans Safari → bouton Partager → <b>Sur l’écran d’accueil</b>.</div>
-  </div>
+  <dialog id="replacementDialog">
+    <button class="dialog-close" data-close="replacementDialog">×</button>
+    <h3>Qui te remplace ?</h3>
+    <div id="replacementDialogList" class="dialog-list"></div>
+  </dialog>
 
-  <div class="grid">
-    <button class="shortcut" data-go="dispos"><span>📅</span><b>Mes dispos</b><small>Saisir heure par heure</small></button>
-    <button class="shortcut" data-go="garde"><span>🚒</span><b>Prochaine garde</b><small>Lecture seule</small></button>
-    <button class="shortcut" data-go="chef"><span>📊</span><b>Chef / Adjoint</b><small>Potentiel opérationnel</small></button>
-    <button class="shortcut" data-go="aide"><span>💡</span><b>Guide</b><small>Mode d’emploi rapide</small></button>
-  </div>
-</section>
-
-<section id="dispos" class="screen">
-  <div class="head"><div><div class="eyebrow">Saisie mobile</div><h2>Mes disponibilités</h2></div><button id="allDay" class="btn">✓ Toute la plage</button></div>
-  <div id="dayTabs" class="tabs"></div>
-  <div class="tip">💡 Touche un créneau pour choisir Disponible, Travail, Formation, GFF, etc., ou déclarer un remplaçant.</div>
-  <div id="slotList" class="slots"></div>
-</section>
-
-<section id="garde" class="screen">
-  <div class="head"><div><div class="eyebrow">Publication</div><h2>Prochaine feuille de garde</h2></div></div>
-  <div class="tip">🔒 Cette vue est en lecture seule pour les agents.</div>
-  <div class="vehicles">
-    <div class="vehicle stat"><h3>STAT INTERV</h3><div class="crew"><div><span>INTERV</span><b>MATET Anatole</b></div></div></div>
-    <div class="vehicle vsav"><h3>VSAV</h3><div class="crew"><div><span>CA</span><b>BRAIL Davy</b></div><div><span>COND</span><b>OUMIRA Kévin</b></div><div><span>EQ</span><b>MATET Anatole</b></div></div></div>
-    <div class="vehicle vlsm"><h3>VLSM</h3><div class="crew"><div><span>COND</span><b>OUMIRA Kévin</b></div></div></div>
-    <div class="vehicle vpf"><h3>VPF</h3><div class="crew"><div><span>CA</span><b>CHOULET Fanny</b></div><div><span>COND</span><b>BRAIL Davy</b></div></div></div>
-    <div class="vehicle fpt"><h3>FPT</h3><div class="crew"><div><span>CA</span><b>BEVILACQUA Christophe</b></div><div><span>COND</span><b>BRAIL Davy</b></div><div><span>CE.1</span><b>OUMIRA Kévin</b></div></div></div>
-    <div class="vehicle ccf"><h3>CCF4-01</h3><div class="crew"><div><span>CA</span><b>BEVILACQUA Christophe</b></div><div><span>COND</span><b>BRAIL Davy</b></div><div><span>EQ.1</span><b>OUMIRA Kévin</b></div><div><span>EQ.2</span><b>MATET Anatole</b></div></div></div>
-  </div>
-</section>
-
-<section id="chef" class="screen">
-  <div class="head"><div><div class="eyebrow">Pilotage</div><h2>Chef de garde / Adjoint</h2></div></div>
-  <div class="row"><button class="btn primary">Publier</button><button class="btn">🔒 Verrouiller</button><button class="btn">↻ Actualiser</button></div>
-  <div class="card"><h2>Potentiel opérationnel / heure</h2><div class="row" id="potential"></div></div>
-  <div class="matrix"><table id="matrix"></table></div>
-</section>
-
-<section id="aide" class="screen">
-  <div class="head"><div><div class="eyebrow">Guide</div><h2>Comment utiliser l’application ?</h2></div></div>
-  <div class="card"><h2>1 · Choisir son nom</h2><p>L’agent sélectionne son nom une seule fois. L’application garde ensuite ce choix sur le téléphone.</p></div>
-  <div class="card"><h2>2 · Saisir ses disponibilités</h2><p>Chaque heure est tactile. Une plage entière peut être passée en disponible rapidement.</p></div>
-  <div class="card"><h2>3 · Déclarer un remplaçant</h2><p>Le nom du remplaçant est enregistré pour être repris dans l’onglet <b>Demande dispo</b> lors de la synchronisation.</p></div>
-  <div class="card"><h2>4 · Installer sur iPhone</h2><p>Safari → Partager → <b>Sur l’écran d’accueil</b>. L’application s’ouvrira ensuite en plein écran comme une application classique.</p></div>
-</section>
-</main>
-
-<nav class="nav">
-  <button class="active" data-go="home"><span>⌂</span><small>Accueil</small></button>
-  <button data-go="dispos"><span>📅</span><small>Dispos</small></button>
-  <button data-go="garde"><span>🚒</span><small>Garde</small></button>
-  <button data-go="chef"><span>📊</span><small>Chef</small></button>
-  <button data-go="aide"><span>?</span><small>Aide</small></button>
-</nav>
-
-<dialog id="statusDialog">
-  <button class="close" onclick="statusDialog.close()">×</button>
-  <h3>Choisir le statut</h3>
-  <div id="statusButtons" class="dialoglist"></div>
-</dialog>
-<dialog id="replacementDialog">
-  <button class="close" onclick="replacementDialog.close()">×</button>
-  <h3>Qui te remplace ?</h3>
-  <div id="replacementButtons" class="dialoglist"></div>
-</dialog>
-
-<script>
-const agents=[
- ["BC","BEVILACQUA Christophe"],["CD","CAMBRIELS Denis"],["BD","BRAIL Davy"],["CFa","CHOULET Fanny"],
- ["OK","OUMIRA Kévin"],["MA","MATET Anatole"],["SÉ","SABLIER Éléa"],["PJ","PRADEILLES Julien"],
- ["TL","TONDUSSON Laurianne"],["BB","BARRAU Benjamin"]
-];
-const statuses=[
- ["DISPO","✓ Disponible","ok"],["INDISPO","× Indisponible","no"],["TRAVAIL","💼 Travail","busy"],
- ["FORMATION","🎓 Formation","busy"],["ÉCOLE","📚 École","busy"],["GFF","🔥 GFF","special"],
- ["GRR","🚒 GRR","special"],["VACANCES","🏖️ Vacances","busy"],["MALADIE","🩺 Maladie","busy"],["REMPLACANT","🔁 Remplaçant","special"]
-];
-const state=JSON.parse(localStorage.getItem("gardes-iphone-test")||'{"agent":"CFa","day":0,"data":{}}');
-const days=["Mardi 25/08","Mercredi 26/08","Jeudi 27/08","Vendredi 28/08","Samedi 29/08","Dimanche 30/08"];
-const hours=["19h-19h59","20h-20h59","21h-21h59","22h-22h59","23h-23h59","00h-00h59","01h-01h59","02h-02h59","03h-03h59","04h-04h59","05h-05h59","06h-06h59"];
-function save(){localStorage.setItem("gardes-iphone-test",JSON.stringify(state))}
-function go(id){document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");document.querySelectorAll(".nav button").forEach(x=>x.classList.toggle("active",x.dataset.go===id));window.scrollTo(0,0);if(id==="dispos")renderDispos()}
-document.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>go(b.dataset.go)));
-const sel=document.getElementById("agentSelect");
-sel.innerHTML=agents.map(a=>`<option value="${a[0]}">${a[1]}</option>`).join("");
-sel.value=state.agent;sel.onchange=e=>{state.agent=e.target.value;save();renderDispos()};
-function key(i){return `${state.agent}|${state.day}|${i}`}
-function renderDispos(){
-  document.getElementById("dayTabs").innerHTML=days.map((d,i)=>`<button class="tab ${i===state.day?'active':''}" data-day="${i}"><b>${d.split(' ')[0]}</b><br><small>${d.split(' ')[1]}</small></button>`).join("");
-  document.querySelectorAll("[data-day]").forEach(b=>b.onclick=()=>{state.day=+b.dataset.day;save();renderDispos()});
-  document.getElementById("slotList").innerHTML=hours.map((h,i)=>{
-    const v=state.data[key(i)]||{status:""};
-    const s=statuses.find(x=>x[0]===v.status)||["","Non renseigné",""];
-    const repl=v.repl?` · ${agents.find(a=>a[0]===v.repl)?.[1]||v.repl}`:"";
-    return `<button class="slot ${s[2]}" data-slot="${i}"><div><b>${h.split('-')[0]}</b><small>${h.split('-')[1]}</small></div><div><b>${s[1]}</b><small>${repl}</small></div><div>›</div></button>`;
-  }).join("");
-  document.querySelectorAll("[data-slot]").forEach(b=>b.onclick=()=>openStatus(+b.dataset.slot));
-}
-function openStatus(i){
-  window._slot=i;
-  statusButtons.innerHTML=statuses.map(s=>`<button data-status="${s[0]}">${s[1]}</button>`).join("");
-  statusButtons.querySelectorAll("button").forEach(b=>b.onclick=()=>{
-    if(b.dataset.status==="REMPLACANT"){statusDialog.close();openRepl();return;}
-    state.data[key(window._slot)]={status:b.dataset.status,repl:""};save();statusDialog.close();renderDispos();
-  });
-  statusDialog.showModal();
-}
-function openRepl(){
-  replacementButtons.innerHTML=agents.filter(a=>a[0]!==state.agent).map(a=>`<button data-repl="${a[0]}"><b>${a[1]}</b><br><small>${a[0]}</small></button>`).join("");
-  replacementButtons.querySelectorAll("button").forEach(b=>b.onclick=()=>{state.data[key(window._slot)]={status:"REMPLACANT",repl:b.dataset.repl};save();replacementDialog.close();renderDispos()});
-  replacementDialog.showModal();
-}
-allDay.onclick=()=>{hours.forEach((_,i)=>state.data[key(i)]={status:"DISPO",repl:""});save();renderDispos()};
-function renderChef(){
-  const potential=[4,4,5,5,5,4,4,4,3,3,2,2];
-  document.getElementById("potential").innerHTML=potential.map((p,i)=>`<div class="btn"><small>${hours[i].split('-')[0]}</small><br><b>${p}</b></div>`).join("");
-  const rows=agents.slice(0,7).map((a,r)=>`<tr><td><b>${a[1].split(' ')[0]}</b></td>${hours.slice(0,8).map((h,i)=>`<td><span class="${(r+i)%4===0?'badge-busy':(r+i)%5===0?'badge-no':'badge-ok'}">${(r+i)%4===0?'T':'✓'}</span></td>`).join("")}</tr>`).join("");
-  document.getElementById("matrix").innerHTML=`<tr><th>Agent</th>${hours.slice(0,8).map(h=>`<th>${h.split('-')[0]}</th>`).join("")}</tr>${rows}`;
-}
-document.querySelector('[data-go="chef"]').addEventListener("click",renderChef);
-if("serviceWorker" in navigator){navigator.serviceWorker.register("./sw.js").catch(()=>{})}
-renderDispos();
-</script>
+  <dialog id="userDialog">
+    <button class="dialog-close" data-close="userDialog">×</button>
+    <h3>Compte</h3>
+    <div id="userDialogContent"></div>
+  </dialog>
 </body>
 </html>
