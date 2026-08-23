@@ -1,3 +1,5 @@
+(function(){
+"use strict";
 const C = window.GARDES_CONFIG;
 const P = window.GARDES_PROFILE;
 const R = window.GardesRepositories;
@@ -78,6 +80,8 @@ function canManage(){ return ["ADMIN","CHEF","ADJOINT"].includes(state.role); }
 function canAdmin(){ return state.role==="ADMIN"; }
 
 async function init(){
+  const bootFallback=document.getElementById("bootFallback");
+  if(bootFallback) bootFallback.remove();
   $("#versionText").textContent=`V${C.version}`;
   $("#teamText").textContent=C.ui.defaultTeam;
   $("#envText").textContent=C.environment;
@@ -610,3 +614,4 @@ function openUserDialog(){
 }
 
 document.addEventListener("DOMContentLoaded",()=>init().catch(err=>{console.error(err);toast(err.message,"error")}));
+})();

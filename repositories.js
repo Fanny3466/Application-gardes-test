@@ -1,3 +1,5 @@
+(function(){
+"use strict";
 const G = window.GARDES_CONFIG;
 const P = window.GARDES_PROFILE;
 
@@ -425,3 +427,4 @@ class GraphRepository {
 }
 
 window.GardesRepositories={DemoRepository,GraphRepository,dateOnly,isoLocal,norm};
+})();

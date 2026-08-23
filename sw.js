@@ -1,7 +1,7 @@
-const CACHE="gardes-v2-2.0.0";
+const CACHE="gardes-v2-2.0.1";
 const CORE=[
-  "./","./index.html","./styles.css?v=2.0.0","./app.js?v=2.0.0",
-  "./repositories.js?v=2.0.0","./config.js?v=2.0.0","./profile.js?v=2.0.0",
+  "./","./index.html","./styles.css?v=2.0.1","./app.js?v=2.0.1",
+  "./repositories.js?v=2.0.1","./config.js?v=2.0.1","./profile.js?v=2.0.1",
   "./manifest.webmanifest","./assets/icon-192.png","./assets/icon-512.png","./assets/apple-touch-icon.png"
 ];
 
