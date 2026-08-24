@@ -699,17 +699,36 @@ class ExcelDirectRepository {
     this.tableCache.delete(key);
   }
 
-  async patchRow(key,index,rowObj){
+  async patchTableFieldsByColumns(key,index,fields){
     const tableName=G.excelDirect.tables[key];
-    const headers=await this.tableHeaders(key);
-    const values=headers.map(h=>rowObj[h]===undefined ? "" : rowObj[h]);
+    if(!tableName) throw new Error(`Table Excel non configurée : ${key}`);
 
-    await this.workbook(`/tables/${encodeURIComponent(tableName)}/rows/${index}`,{
-      method:"PATCH",
-      body:{values:[values]}
-    });
+    for(const [columnName,value] of Object.entries(fields||{})){
+      const colPath=`/tables/${encodeURIComponent(tableName)}/columns/${encodeURIComponent(columnName)}/range`;
+      const range=await this.workbook(colPath);
+      const values=Array.isArray(range?.values)
+        ? range.values.map(r=>Array.isArray(r)?[...r]:[r])
+        : [];
+
+      const target=index+1;
+      if(target<1 || target>=values.length){
+        throw new Error(`Index de ligne invalide : ${tableName}.${columnName} / ${index}`);
+      }
+
+      while(values[target].length<1) values[target].push("");
+      values[target][0]=value===undefined ? "" : value;
+
+      await this.workbook(colPath,{
+        method:"PATCH",
+        body:{values}
+      });
+    }
 
     this.tableCache.delete(key);
+  }
+
+  async patchRow(key,index,rowObj){
+    await this.patchTableFieldsByColumns(key,index,rowObj);
   }
 
   async getAgents(){
@@ -826,8 +845,17 @@ class ExcelDirectRepository {
       StatutSync:"A_APPLIQUER"
     };
 
-    if(existing) await this.patchRow("locks",existing.__index,row);
-    else await this.appendRows("locks",[row]);
+    if(existing){
+      await this.patchTableFieldsByColumns("locks",existing.__index,{
+        Scope:row.Scope,
+        Date:row.Date,
+        Bloc:row.Bloc,
+        Locked:row.Locked,
+        LockedBy:row.LockedBy,
+        LockedAt:row.LockedAt,
+        StatutSync:row.StatutSync
+      });
+    }else await this.appendRows("locks",[row]);
 
     return row;
   }
@@ -877,7 +905,12 @@ class ExcelDirectRepository {
     if(Object.prototype.hasOwnProperty.call(payload,"Role")) row.Role=(payload.Role||"AGENT").toUpperCase();
     if(Object.prototype.hasOwnProperty.call(payload,"Actif")) row.Actif=payload.Actif;
 
-    await this.patchRow("agents",existing.__index,row);
+    const fields={};
+    if(Object.prototype.hasOwnProperty.call(payload,"Email")) fields.Email=row.Email;
+    if(Object.prototype.hasOwnProperty.call(payload,"Role")) fields.Role=row.Role;
+    if(Object.prototype.hasOwnProperty.call(payload,"Actif")) fields.Actif=row.Actif;
+
+    await this.patchTableFieldsByColumns("agents",existing.__index,fields);
     this.tableCache.delete("agents");
     return row;
   }

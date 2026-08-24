@@ -151,7 +151,7 @@ async function init(){
   }
 
   if("serviceWorker" in navigator){
-    navigator.serviceWorker.register("./sw.js?v=2.3.1").catch(console.warn);
+    navigator.serviceWorker.register("./sw.js?v=2.3.2").catch(console.warn);
   }
 }
 
