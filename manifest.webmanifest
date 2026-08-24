@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Application Gardes V2",
+  "name": "Application Gardes",
   "short_name": "Gardes",
-  "description": "Disponibilités, remplaçants, feuille de garde et pilotage Chef/Adjoint.",
+  "description": "Disponibilités et feuilles de garde connectées au classeur Excel de référence.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

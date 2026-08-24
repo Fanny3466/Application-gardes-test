@@ -1,58 +1,68 @@
+(function(){
+"use strict";
+const PROD = window.GARDES_PRODUCTION || {};
+
 window.GARDES_CONFIG = {
-  version: "2.0.1",
+  version: "2.2.0",
   appName: "Application Gardes",
-  environment: "TEST",
-
-  /*
-   * "demo" = immédiatement testable sur GitHub Pages.
-   * "m365" = Microsoft Entra + Microsoft Graph + SharePoint Lists.
-   */
-  mode: "demo",
-
+  environment: "PRODUCTION",
+  mode: "excel-direct",
   publicUrl: "https://fanny3466.github.io/Application-gardes-test/",
 
-  microsoft365: {
-    tenantId: "A_COMPLETER",
-    clientId: "A_COMPLETER",
-    redirectUri: "https://fanny3466.github.io/Application-gardes-test/",
-    scopes: ["User.Read", "Sites.ReadWrite.All"],
+  productionReady:
+    PROD.configured === true &&
+    !!PROD.tenantId &&
+    !!PROD.clientId &&
+    !!PROD.driveId &&
+    !!PROD.itemId,
 
-    /*
-     * MSAL Browser v5 est chargé dynamiquement uniquement en mode m365.
-     * Pour un déploiement de production, voir docs/CONFIGURATION_MICROSOFT_365.md :
-     * Microsoft recommande désormais de bundler @azure/msal-browser avec npm.
-     */
+  microsoft365: {
+    tenantId: PROD.tenantId || "",
+    clientId: PROD.clientId || "",
+    redirectUri: "https://fanny3466.github.io/Application-gardes-test/",
+    scopes: ["User.Read", "Files.ReadWrite"],
     msalEsmFallback:
       "https://cdn.jsdelivr.net/npm/@azure/msal-browser@5.17.3/+esm"
   },
 
-  sharePoint: {
-    hostname: "A_COMPLETER.sharepoint.com",
-    sitePath: "/sites/A_COMPLETER",
-    lists: {
-      agents: "Agents",
-      slots: "Creneaux",
-      availability: "Disponibilites",
-      assignments: "Affectations",
-      locks: "Verrous",
-      publications: "Publications",
-      journal: "Journal"
-    }
+  excelDirect: {
+    driveId: PROD.driveId || "",
+    itemId: PROD.itemId || "",
+    workbookName: PROD.workbookName || "",
+
+    tables: {
+      agents: "tblApp_Agents",
+      slots: "tblApp_Creneaux",
+      availability: "tblApp_Disponibilites",
+      submissions: "tblApp_Saisies",
+      assignments: "tblApp_Affectations",
+      locks: "tblApp_Verrous",
+      publications: "tblApp_Publications",
+      commands: "tblApp_Commandes",
+      journal: "tblApp_Journal"
+    },
+
+    maxExcelSyncAgeMinutes: Number(PROD.maxExcelSyncAgeMinutes || 5),
+    maxRetries: 4
   },
 
-  // Autorisations supplémentaires si la colonne Role n'est pas encore créée.
   roles: {
     chefAdjointEmails: [],
-    adminEmails: []
+    adminEmails: Array.isArray(PROD.adminEmails) ? PROD.adminEmails : []
+  },
+
+  bootstrap: {
+    adminAgentCode: PROD.bootstrapAdminAgentCode || ""
   },
 
   ui: {
     defaultTeam: "GARDE 3",
-    allowDemoRoleSwitch: true,
     showInstallHelpInBrowser: true,
     availabilityDefaultBlock: "19h-00h",
     autoSelectAgentFromEmail: true,
     hideAgentSelectorForMatchedM365User: true,
-    showEmptyGuardRoles: true
+    showEmptyGuardRoles: true,
+    allowAdminEditAgents: false
   }
 };
+})();

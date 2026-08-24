@@ -8,34 +8,36 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Gardes">
   <meta name="format-detection" content="telephone=no">
-  <title>Application Gardes V2</title>
+  <title>Application Gardes</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="icon" href="assets/icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=2.0.1">
+  <link rel="stylesheet" href="styles.css?v=2.2.0">
   <script>
     window.addEventListener("error", function(e){
       var b=document.getElementById("bootFallback");
-      if(b){b.innerHTML='<div style="max-width:520px"><h2>Erreur de chargement</h2><p style="color:#667786">'+String(e.message||"Erreur JavaScript")+'</p><p style="font-size:12px;color:#8A98A3">Recharge la page après avoir remplacé les fichiers V2.0.1.</p></div>';}
+      if(b){b.innerHTML='<div style="max-width:520px"><h2>Erreur de chargement</h2><p style="color:#667786">'+String(e.message||"Erreur JavaScript")+'</p><p style="font-size:12px;color:#8A98A3">Recharge la page après avoir remplacé les fichiers V2.2.0.</p></div>';}
     });
   </script>
-  <script src="config.js?v=2.0.1" defer></script>
-  <script src="profile.js?v=2.0.1" defer></script>
-  <script src="repositories.js?v=2.0.1" defer></script>
-  <script src="app.js?v=2.0.1" defer></script>
+  <script src="production-config.js?v=2.2.0" defer></script>
+  <script src="config.js?v=2.2.0" defer></script>
+  <script src="profile.js?v=2.2.0" defer></script>
+  <script src="repositories.js?v=2.2.0" defer></script>
+  <script src="app.js?v=2.2.0" defer></script>
 </head>
 <body>
   <div id="bootFallback" style="position:fixed;inset:0;z-index:9999;display:grid;place-content:center;text-align:center;background:#F3F7FB;color:#17212B;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;padding:24px">
-    <div><img src="assets/icon-192.png" alt="" style="width:72px;height:72px;border-radius:22px"><h2 style="margin:12px 0 6px">Application Gardes V2</h2><p style="margin:0;color:#667786">Chargement de l’application…</p></div>
+    <div><img src="assets/icon-192.png" alt="" style="width:72px;height:72px;border-radius:22px"><h2 style="margin:12px 0 6px">Application Gardes</h2><p style="margin:0;color:#667786">Chargement de l’application…</p></div>
   </div>
   <div id="loader" class="loader hidden"><div><div class="loader-spin"></div><small id="loaderText">Synchronisation…</small></div></div>
   <div id="toast" class="toast"></div>
 
   <section id="loginScreen" class="login-screen hidden">
     <img src="assets/icon-192.png" alt="">
-    <h1>Application Gardes</h1>
-    <p>Connecte-toi avec ton compte professionnel pour accéder à tes disponibilités et à la feuille de garde.</p>
+    <h1 id="loginTitle">Application Gardes</h1>
+    <p id="loginDetail">Connecte-toi avec ton compte professionnel pour accéder à tes disponibilités et à la feuille de garde.</p>
     <button id="btnMicrosoftLogin" class="btn primary">Se connecter avec Microsoft 365</button>
+    <a id="setupProductionLink" class="setup-link hidden" href="setup.html">Configurer la connexion de production</a>
   </section>
 
   <div id="appShell" class="hidden">
@@ -158,7 +160,7 @@
       </section>
 
       <section id="screen-admin" class="screen">
-        <div class="screen-head"><div><span class="eyebrow">Administration</span><h2>Diagnostic V2</h2></div></div>
+        <div class="screen-head"><div><span class="eyebrow">Administration</span><h2>Diagnostic production</h2></div></div>
         <div id="adminStats" class="admin-grid"></div>
         <div class="card">
           <div class="card-title"><h3>État des connexions</h3><button id="btnRunDiagnostics" class="btn">Tester</button></div>
@@ -178,11 +180,11 @@
         <div class="help">
           <details open><summary>1 · Identification de l’agent</summary><p>En mode Microsoft 365, l’application recherche automatiquement l’adresse du compte connecté dans la liste <b>Agents</b>. L’agent ne voit alors que ses propres disponibilités.</p></details>
           <details><summary>2 · Saisir les disponibilités</summary><p>Choisis le jour puis la plage horaire. Touche chaque heure ou utilise <b>Toute la plage</b>. Les statuts correspondent aux valeurs reconnues par le classeur Excel.</p></details>
-          <details><summary>3 · Déclarer un remplaçant</summary><p>Choisis <b>Remplaçant</b>, puis la personne concernée. Son code et son nom sont enregistrés dans SharePoint afin que le module VBA puisse les reprendre dans <b>Demande dispo</b>.</p></details>
+          <details><summary>3 · Déclarer un remplaçant</summary><p>Choisis <b>Remplaçant</b>, puis la personne concernée. La saisie est envoyée dans <b>tblApp_Saisies</b> du classeur Excel, puis le module VBA la reprend dans <b>Demande dispo</b>.</p></details>
           <details><summary>4 · Feuille de garde</summary><p>La vue <b>Garde</b> lit les affectations publiées par le classeur. Les postes non pourvus restent visibles si l’option correspondante est activée.</p></details>
-          <details><summary>5 · Chef de garde / Adjoint</summary><p>La matrice conserve la première colonne et les heures pendant le défilement. Les actions <b>Verrouiller</b>, <b>Publier</b> et <b>Actualiser</b> sont reliées aux listes SharePoint en mode Microsoft 365.</p></details>
+          <details><summary>5 · Chef de garde / Adjoint</summary><p>La matrice conserve la première colonne et les heures pendant le défilement. Les actions <b>Verrouiller</b>, <b>Publier</b> et <b>Actualiser</b> écrivent directement dans les tables techniques du classeur Excel.</p></details>
           <details><summary>6 · Installer sur iPhone</summary><p>Ouvre l’application dans Safari → <b>Partager</b> → <b>Sur l’écran d’accueil</b>. Le bandeau d’installation disparaît automatiquement lorsque l’application est déjà ouverte en mode autonome.</p></details>
-          <details><summary>7 · Chaîne de synchronisation</summary><ol><li>iPhone → liste <b>Disponibilites</b>.</li><li>Power Automate → module VBA.</li><li>VBA → <b>Demande dispo</b> puis calcul de la garde.</li><li>Excel → liste <b>Affectations</b>.</li><li>Application → affichage de la garde publiée.</li></ol></details>
+          <details><summary>7 · Chaîne de synchronisation</summary><ol><li>iPhone → <b>tblApp_Saisies</b> dans le fichier Excel.</li><li>Excel Desktop détecte la nouvelle saisie.</li><li>VBA → <b>Demande dispo</b> puis <b>Remplir_Feuille_Gardes_En_W</b>.</li><li><b>Mois complet (Diffusion)</b> → <b>tblApp_Affectations</b>.</li><li>L’application relit directement le résultat via Microsoft Graph.</li></ol></details>
         </div>
       </section>
     </main>

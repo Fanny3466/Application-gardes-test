@@ -1,14 +1,16 @@
-const CACHE="gardes-v2-2.0.1";
+const CACHE="gardes-production-2.2.0";
 const CORE=[
-  "./","./index.html","./styles.css?v=2.0.1","./app.js?v=2.0.1",
-  "./repositories.js?v=2.0.1","./config.js?v=2.0.1","./profile.js?v=2.0.1",
-  "./manifest.webmanifest","./assets/icon-192.png","./assets/icon-512.png","./assets/apple-touch-icon.png"
+  "./","./index.html","./styles.css?v=2.2.0","./app.js?v=2.2.0",
+  "./repositories.js?v=2.2.0","./config.js?v=2.2.0","./profile.js?v=2.2.0",
+  "./production-config.js?v=2.2.0","./manifest.webmanifest",
+  "./assets/icon-192.png","./assets/icon-512.png","./assets/apple-touch-icon.png"
 ];
 
 self.addEventListener("install",event=>{
   self.skipWaiting();
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)));
 });
+
 self.addEventListener("activate",event=>{
   event.waitUntil(
     caches.keys()
@@ -16,13 +18,16 @@ self.addEventListener("activate",event=>{
       .then(()=>self.clients.claim())
   );
 });
+
 self.addEventListener("fetch",event=>{
   if(event.request.method!=="GET") return;
   const url=new URL(event.request.url);
   if(url.origin!==location.origin) return;
 
+  // Configuration et scripts : réseau d'abord pour prendre immédiatement
+  // les mises à jour de production. Cache uniquement en secours.
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request,{cache:"no-store"})
       .then(response=>{
         const copy=response.clone();
         caches.open(CACHE).then(cache=>cache.put(event.request,copy));

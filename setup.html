@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Configuration production · Application Gardes</title>
+  <link rel="icon" href="assets/icon-192.png">
+  <link rel="stylesheet" href="setup.css?v=2.2.0">
+</head>
+<body>
+  <main class="setup-shell">
+    <header>
+      <img src="assets/icon-192.png" alt="">
+      <div>
+        <span>APPLICATION GARDES · V2.2.0</span>
+        <h1>Assistant de mise en production</h1>
+        <p>Connexion Microsoft 365 → test du fichier Excel → génération de <code>production-config.js</code>.</p>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>1 · Application Microsoft Entra</h2>
+      <p class="hint">Crée une inscription d’application de type <b>Single-page application (SPA)</b>. N’ajoute jamais de client secret dans une application GitHub Pages.</p>
+      <label>Tenant ID
+        <input id="tenantId" autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+      </label>
+      <label>Client ID
+        <input id="clientId" autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+      </label>
+      <div class="uri-box">
+        <b>URI de redirection à déclarer dans Entra :</b>
+        <code>https://fanny3466.github.io/Application-gardes-test/</code>
+        <code>https://fanny3466.github.io/Application-gardes-test/setup.html</code>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2 · Fichier Excel</h2>
+      <p class="hint">Le fichier doit être dans SharePoint ou OneDrive Entreprise et contenir les tables créées par le module Excel Direct V1.2.</p>
+      <label>Lien de partage du fichier .xlsm
+        <textarea id="shareUrl" rows="3" placeholder="https://...sharepoint.com/..."></textarea>
+      </label>
+      <label>Code agent de l’administratrice initiale
+        <input id="adminAgentCode" value="CFa">
+      </label>
+      <p class="hint">Lors du test, l’assistant associera le compte Microsoft connecté à ce code dans <code>tblApp_Agents</code> et lui attribuera le rôle ADMIN.</p>
+    </section>
+
+    <section class="card">
+      <h2>3 · Test réel</h2>
+      <button id="btnTest" class="primary">Se connecter à Microsoft 365 et tester</button>
+      <div id="status" class="status">En attente.</div>
+      <div id="checks" class="checks"></div>
+    </section>
+
+    <section id="resultCard" class="card hidden">
+      <h2>4 · Configuration générée</h2>
+      <p class="hint">Le lien de partage n’est pas conservé. Seuls les identifiants du fichier sont placés dans le fichier final.</p>
+      <textarea id="generatedConfig" rows="18" readonly></textarea>
+      <div class="actions">
+        <button id="btnDownload" class="primary">Télécharger production-config.js</button>
+        <button id="btnCopy">Copier</button>
+      </div>
+      <div class="next">
+        <b>Dernière étape :</b> remplace à la racine de GitHub le fichier <code>production-config.js</code> par celui généré, puis attends le déploiement Pages.
+      </div>
+    </section>
+
+    <footer><a href="./">← Retour à l’application</a></footer>
+  </main>
+  <script src="setup.js?v=2.2.0"></script>
+</body>
+</html>

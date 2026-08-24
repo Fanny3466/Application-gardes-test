@@ -426,5 +426,474 @@ class GraphRepository {
   }
 }
 
-window.GardesRepositories={DemoRepository,GraphRepository,dateOnly,isoLocal,norm};
+
+class ExcelDirectRepository {
+  constructor(){
+    this.msalModule=null;
+    this.msalApp=null;
+    this.account=null;
+    this.driveId="";
+    this.itemId="";
+    this.sessionId="";
+    this.tableCache=new Map();
+    this.lastHealth=null;
+  }
+
+  configOk(){
+    const m=G.microsoft365||{};
+    const x=G.excelDirect||{};
+    return !!(G.productionReady && m.tenantId && m.clientId && x.driveId && x.itemId);
+  }
+
+  async init(){
+    if(!this.configOk()){
+      throw new Error("CONFIGURATION_PRODUCTION_INCOMPLETE");
+    }
+
+    const m=G.microsoft365;
+    this.driveId=G.excelDirect.driveId;
+    this.itemId=G.excelDirect.itemId;
+
+    this.msalModule=await import(m.msalEsmFallback);
+    const {PublicClientApplication}=this.msalModule;
+
+    this.msalApp=new PublicClientApplication({
+      auth:{
+        clientId:m.clientId,
+        authority:`https://login.microsoftonline.com/${m.tenantId}`,
+        redirectUri:m.redirectUri,
+        postLogoutRedirectUri:m.redirectUri
+      },
+      cache:{cacheLocation:"localStorage"}
+    });
+
+    await this.msalApp.initialize();
+    const redirect=await this.msalApp.handleRedirectPromise();
+
+    if(redirect?.account){
+      this.msalApp.setActiveAccount(redirect.account);
+    }
+
+    this.account=
+      this.msalApp.getActiveAccount() ||
+      this.msalApp.getAllAccounts()[0] ||
+      null;
+
+    if(this.account){
+      this.msalApp.setActiveAccount(this.account);
+      await this.ensureSession();
+    }
+  }
+
+  async signIn(){
+    if(!this.msalApp) await this.init();
+    await this.msalApp.loginRedirect({
+      scopes:G.microsoft365.scopes,
+      prompt:"select_account"
+    });
+  }
+
+  async signOut(){
+    if(!this.msalApp || !this.account) return;
+    await this.msalApp.logoutRedirect({
+      account:this.account,
+      postLogoutRedirectUri:G.microsoft365.redirectUri
+    });
+  }
+
+  async token(){
+    if(!this.account){
+      this.account=this.msalApp?.getActiveAccount() || this.msalApp?.getAllAccounts()?.[0] || null;
+    }
+    if(!this.account) throw new Error("Connexion Microsoft 365 requise.");
+
+    try{
+      const r=await this.msalApp.acquireTokenSilent({
+        account:this.account,
+        scopes:G.microsoft365.scopes
+      });
+      return r.accessToken;
+    }catch(err){
+      await this.msalApp.acquireTokenRedirect({
+        account:this.account,
+        scopes:G.microsoft365.scopes
+      });
+      throw new Error("Redirection vers Microsoft 365…");
+    }
+  }
+
+  sleep(ms){ return new Promise(resolve=>setTimeout(resolve,ms)); }
+
+  async graph(path,options={}){
+    const maxRetries=Number(G.excelDirect.maxRetries||4);
+    let lastError=null;
+
+    for(let attempt=0;attempt<=maxRetries;attempt++){
+      const token=await this.token();
+
+      let response;
+      try{
+        response=await fetch(
+          path.startsWith("https://") ? path : `https://graph.microsoft.com/v1.0${path}`,
+          {
+            method:options.method||"GET",
+            headers:{
+              Authorization:`Bearer ${token}`,
+              Accept:"application/json",
+              ...(options.body?{"Content-Type":"application/json"}:{}),
+              ...(options.session && this.sessionId ? {"Workbook-Session-Id":this.sessionId}:{}),
+              ...(options.headers||{})
+            },
+            body:options.body ? JSON.stringify(options.body) : undefined,
+            cache:"no-store"
+          }
+        );
+      }catch(networkErr){
+        lastError=networkErr;
+        if(attempt<maxRetries){
+          await this.sleep(700*Math.pow(2,attempt));
+          continue;
+        }
+        throw networkErr;
+      }
+
+      if(response.ok){
+        if(response.status===204) return null;
+        const ct=response.headers.get("content-type")||"";
+        return ct.includes("application/json") ? response.json() : response.text();
+      }
+
+      const detail=await response.text();
+      const err=new Error(`Microsoft Graph ${response.status} : ${detail.slice(0,1200)}`);
+      err.status=response.status;
+      err.detail=detail;
+      lastError=err;
+
+      // Throttling / indisponibilité temporaire / timeout Graph.
+      if([429,502,503,504].includes(response.status) && attempt<maxRetries){
+        const retryAfter=Number(response.headers.get("Retry-After")||0);
+        await this.sleep(retryAfter>0 ? retryAfter*1000 : 800*Math.pow(2,attempt));
+        continue;
+      }
+
+      throw err;
+    }
+
+    throw lastError || new Error("Erreur Microsoft Graph.");
+  }
+
+  workbookBase(){
+    return `/drives/${encodeURIComponent(this.driveId)}/items/${encodeURIComponent(this.itemId)}/workbook`;
+  }
+
+  async ensureSession(force=false){
+    if(this.sessionId && !force) return this.sessionId;
+    this.sessionId="";
+
+    try{
+      const r=await this.graph(`${this.workbookBase()}/createSession`,{
+        method:"POST",
+        body:{persistChanges:true}
+      });
+      this.sessionId=r?.id||"";
+    }catch(err){
+      // Une session améliore les performances, mais les API Excel peuvent aussi
+      // fonctionner sans en-tête de session. On ne masque toutefois pas les
+      // erreurs structurelles / autorisations.
+      const text=String(err?.message||err);
+      if(err?.status===403 || err?.status===404 || /unsupported|invalid|workbook/i.test(text)){
+        throw new Error(
+          "Le classeur Excel n'est pas accessible par l'API Workbook Microsoft Graph. "+
+          "Vérifie le fichier, ses droits et le test setup.html. Détail : "+text
+        );
+      }
+      console.warn("Session Excel non créée, poursuite sans session :",err);
+    }
+    return this.sessionId;
+  }
+
+  async workbook(path,options={},retrySession=true){
+    try{
+      return await this.graph(`${this.workbookBase()}${path}`,{...options,session:true});
+    }catch(err){
+      const t=String(err?.detail||err?.message||"");
+      if(retrySession && /invalidSession|session.*invalid|session.*expired/i.test(t)){
+        await this.ensureSession(true);
+        return this.workbook(path,options,false);
+      }
+      throw err;
+    }
+  }
+
+  async getCurrentUser(){
+    if(!this.account) return null;
+    const me=await this.graph("/me?$select=id,displayName,mail,userPrincipalName");
+    return {
+      id:me.id,
+      name:me.displayName,
+      email:me.mail||me.userPrincipalName||""
+    };
+  }
+
+  async tableObjects(key,refresh=false){
+    if(!refresh && this.tableCache.has(key)) return this.tableCache.get(key);
+
+    const tableName=G.excelDirect.tables[key];
+    if(!tableName) throw new Error(`Table Excel non configurée : ${key}`);
+
+    const range=await this.workbook(`/tables/${encodeURIComponent(tableName)}/range`);
+    const values=Array.isArray(range?.values)?range.values:[];
+
+    if(!values.length){
+      this.tableCache.set(key,[]);
+      return [];
+    }
+
+    const headers=(values[0]||[]).map(v=>String(v??"").trim());
+    const rows=[];
+
+    for(let i=1;i<values.length;i++){
+      const vals=values[i]||[];
+      if(vals.every(v=>v===null || v===undefined || String(v).trim()==="")) continue;
+
+      const obj={__index:i-1};
+      headers.forEach((h,j)=>{ if(h) obj[h]=vals[j]; });
+      rows.push(obj);
+    }
+
+    this.tableCache.set(key,rows);
+    return rows;
+  }
+
+  async tableHeaders(key){
+    const tableName=G.excelDirect.tables[key];
+    const range=await this.workbook(`/tables/${encodeURIComponent(tableName)}/headerRowRange`);
+    return (range?.values?.[0]||[]).map(v=>String(v??"").trim());
+  }
+
+  async appendRows(key,rowObjs){
+    if(!rowObjs?.length) return;
+    const tableName=G.excelDirect.tables[key];
+    const headers=await this.tableHeaders(key);
+    const values=rowObjs.map(row=>headers.map(h=>row[h]===undefined ? "" : row[h]));
+
+    await this.workbook(`/tables/${encodeURIComponent(tableName)}/rows/add`,{
+      method:"POST",
+      body:{index:null,values}
+    });
+
+    this.tableCache.delete(key);
+  }
+
+  async patchRow(key,index,rowObj){
+    const tableName=G.excelDirect.tables[key];
+    const headers=await this.tableHeaders(key);
+    const values=headers.map(h=>rowObj[h]===undefined ? "" : rowObj[h]);
+
+    await this.workbook(`/tables/${encodeURIComponent(tableName)}/rows/${index}`,{
+      method:"PATCH",
+      body:{values:[values]}
+    });
+
+    this.tableCache.delete(key);
+  }
+
+  async getAgents(){
+    const rows=await this.tableObjects("agents",true);
+    return rows.map(r=>({
+      ...r,
+      id:r.Code,
+      Title:r.Title||r.Agent||"",
+      Actif:!(norm(r.Actif)==="FALSE" || norm(r.Actif)==="NON" || Number(r.Actif)===0)
+    }));
+  }
+
+  async getSlots(){ return this.tableObjects("slots",true); }
+  async getAssignments(){ return this.tableObjects("assignments",true); }
+  async getPublications(){ return this.tableObjects("publications",true); }
+  async getLocks(){ return this.tableObjects("locks",true); }
+  async getJournal(){ return this.tableObjects("journal",true); }
+
+  async getPendingSubmissions(){
+    const rows=await this.tableObjects("submissions",true);
+    return rows.filter(r=>{
+      const s=norm(r.StatutSync);
+      return ["A_IMPORTER","EN_ATTENTE","IMPORTE"].includes(s);
+    });
+  }
+
+  mergeAvailability(mirror,pending){
+    const map=new Map();
+
+    for(const r of mirror){
+      const k=`${norm(r.AgentCode)}|${String(r.CreneauId||"")}`;
+      map.set(k,{...r});
+    }
+
+    const sorted=[...pending].sort((a,b)=>
+      String(a.ModifiedAt||"").localeCompare(String(b.ModifiedAt||""))
+    );
+
+    for(const r of sorted){
+      const k=`${norm(r.AgentCode)}|${String(r.CreneauId||"")}`;
+      map.set(k,{
+        ...map.get(k),
+        ...r,
+        Source:"APPLICATION",
+        Pending:true
+      });
+    }
+
+    return [...map.values()];
+  }
+
+  async getAvailability(agentCode){
+    const all=await this.getAllAvailability();
+    return all.filter(x=>norm(x.AgentCode)===norm(agentCode));
+  }
+
+  async getAllAvailability(){
+    const [mirror,pending]=await Promise.all([
+      this.tableObjects("availability",true),
+      this.getPendingSubmissions()
+    ]);
+    return this.mergeAvailability(mirror,pending);
+  }
+
+  submissionRow(payload){
+    const now=new Date().toISOString();
+    const rnd=Math.random().toString(16).slice(2,10);
+    return {
+      ID:`SAISIE-${Date.now()}-${rnd}`,
+      AgentCode:payload.AgentCode,
+      AgentNom:payload.AgentNom||"",
+      CreneauId:String(payload.CreneauId),
+      DateGarde:payload.DateGarde||"",
+      Date:payload.Date||"",
+      HeureDebut:payload.HeureDebut||"",
+      Valeur:payload.Valeur||"",
+      RemplacantCode:payload.RemplacantCode||"",
+      RemplacantNom:payload.RemplacantNom||"",
+      DemandePar:this.account?.username||"",
+      Source:"APPLICATION",
+      StatutSync:"A_IMPORTER",
+      ModifiedAt:now,
+      TraiteAt:"",
+      Message:""
+    };
+  }
+
+  async saveAvailability(payload){
+    const row=this.submissionRow(payload);
+    await this.appendRows("submissions",[row]);
+    return row;
+  }
+
+  async saveAvailabilityBatch(payloads){
+    const rows=payloads.map(p=>this.submissionRow(p));
+    await this.appendRows("submissions",rows);
+    return rows;
+  }
+
+  async setLock(scope,date,bloc,locked,userEmail){
+    const rows=await this.tableObjects("locks",true);
+    const id=`${scope}|${date}|${bloc}`;
+    const existing=rows.find(x=>String(x.ID||"")===id);
+
+    const row={
+      ...(existing||{}),
+      ID:id,
+      Scope:scope,
+      Date:date,
+      Bloc:bloc,
+      Locked:!!locked,
+      LockedBy:userEmail||"",
+      LockedAt:new Date().toISOString(),
+      StatutSync:"A_APPLIQUER"
+    };
+
+    if(existing) await this.patchRow("locks",existing.__index,row);
+    else await this.appendRows("locks",[row]);
+
+    return row;
+  }
+
+  async addCommand(command,date="",bloc="",userEmail=""){
+    const row={
+      ID:`CMD-${Date.now()}-${Math.random().toString(16).slice(2,8)}`,
+      Commande:command,
+      DateGarde:date,
+      Bloc:bloc,
+      DemandePar:userEmail||"",
+      DemandeAt:new Date().toISOString(),
+      Statut:"A_TRAITER",
+      TraiteAt:"",
+      Message:""
+    };
+    await this.appendRows("commands",[row]);
+    return row;
+  }
+
+  async publish(type,data,userEmail){
+    const row={
+      ID:`PUB-${Date.now()}-${Math.random().toString(16).slice(2,7)}`,
+      Type:type,
+      DateDebut:data.dateDebut||"",
+      DateFin:data.dateFin||"",
+      Bloc:data.bloc||"",
+      Version:String(Date.now()),
+      PubliePar:userEmail||"",
+      PublishedAt:new Date().toISOString(),
+      Gele:true,
+      Statut:"DEMANDEE"
+    };
+
+    await this.appendRows("publications",[row]);
+    await this.addCommand("PUBLIER_GARDE",data.dateDebut||"",data.bloc||"",userEmail||"");
+    return row;
+  }
+
+  async getLastSyncInfo(){
+    const assignments=await this.tableObjects("assignments",true);
+    const timestamps=assignments
+      .map(x=>String(x.ModifiedAt||""))
+      .filter(Boolean)
+      .sort();
+
+    const last=timestamps.at(-1)||"";
+    return {
+      timestamp:last,
+      pending:(await this.getPendingSubmissions()).length
+    };
+  }
+
+  async healthCheck(){
+    const required=[
+      "agents","slots","availability","submissions","assignments",
+      "locks","publications","commands","journal"
+    ];
+    const tables={};
+
+    const file=await this.graph(
+      `/drives/${encodeURIComponent(this.driveId)}/items/${encodeURIComponent(this.itemId)}?`+
+      "$select=id,name,webUrl,lastModifiedDateTime,file,parentReference"
+    );
+
+    for(const key of required){
+      try{
+        const tableName=G.excelDirect.tables[key];
+        const info=await this.workbook(`/tables/${encodeURIComponent(tableName)}`);
+        tables[key]={ok:true,name:info?.name||tableName};
+      }catch(err){
+        tables[key]={ok:false,error:String(err?.message||err)};
+      }
+    }
+
+    const sync=await this.getLastSyncInfo();
+    this.lastHealth={file,tables,sync,checkedAt:new Date().toISOString()};
+    return this.lastHealth;
+  }
+}
+
+window.GardesRepositories={DemoRepository,GraphRepository,ExcelDirectRepository,dateOnly,isoLocal,norm};
 })();

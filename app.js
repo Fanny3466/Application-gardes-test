@@ -20,7 +20,10 @@ const state={
   chefBlock:C.ui.availabilityDefaultBlock,
   role:"AGENT",
   busy:false,
-  lastSync:null
+  lastSync:null,
+  excelSync:null,
+  pendingSubmissions:0,
+  health:null
 };
 
 function esc(s=""){
@@ -35,7 +38,14 @@ function busy(on,text="Synchronisation…"){
 }
 function setLastSync(){
   state.lastSync=new Date();
-  $("#btnSyncMini").textContent=`Dernière synchro : ${state.lastSync.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}`;
+
+  const raw=state.excelSync?.timestamp||"";
+  const dt=raw ? new Date(raw) : null;
+  const valid=dt && !Number.isNaN(dt.valueOf());
+
+  $("#btnSyncMini").textContent=valid
+    ? `Excel : ${dt.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}${state.pendingSubmissions?` · ${state.pendingSubmissions} en attente`:""}`
+    : `Actualisé : ${state.lastSync.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}`;
 }
 function standalone(){
   return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true;
@@ -86,9 +96,27 @@ async function init(){
   $("#teamText").textContent=C.ui.defaultTeam;
   $("#envText").textContent=C.environment;
   $("#envDot").classList.toggle("prod",norm(C.environment)==="PRODUCTION");
-  $("#modePill").textContent=C.mode==="demo" ? "MODE DÉMONSTRATION" : "MICROSOFT 365 CONNECTÉ";
+  $("#modePill").textContent=
+    C.mode==="demo" ? "MODE DÉMONSTRATION" :
+    C.mode==="excel-direct" ? "PRODUCTION · EXCEL DIRECT" :
+    "MICROSOFT 365 CONNECTÉ";
 
-  state.repo = C.mode==="demo" ? new R.DemoRepository() : new R.GraphRepository();
+  if(C.mode==="excel-direct" && !C.productionReady){
+    bindStatic();
+    $("#loginScreen").classList.remove("hidden");
+    $("#appShell").classList.add("hidden");
+    $("#loginTitle").textContent="Configuration production requise";
+    $("#loginDetail").textContent="Le site est prêt, mais les identifiants Microsoft 365 et Excel n'ont pas encore été injectés.";
+    $("#btnMicrosoftLogin").classList.add("hidden");
+    $("#setupProductionLink").classList.remove("hidden");
+    busy(false);
+    return;
+  }
+
+  state.repo =
+      C.mode==="demo" ? new R.DemoRepository() :
+      C.mode==="excel-direct" ? new R.ExcelDirectRepository() :
+      new R.GraphRepository();
 
   bindStatic();
   updateOnlineState();
@@ -99,7 +127,7 @@ async function init(){
   try{
     await state.repo.init();
 
-    if(C.mode==="m365"){
+    if(C.mode==="m365" || C.mode==="excel-direct"){
       state.user=await state.repo.getCurrentUser();
       if(!state.user){
         $("#loginScreen").classList.remove("hidden");
@@ -114,7 +142,7 @@ async function init(){
   }catch(err){
     console.error(err);
     toast(err.message,"error");
-    if(C.mode==="m365"){
+    if(C.mode==="m365" || C.mode==="excel-direct"){
       $("#loginScreen").classList.remove("hidden");
       $("#appShell").classList.add("hidden");
     }
@@ -123,7 +151,7 @@ async function init(){
   }
 
   if("serviceWorker" in navigator){
-    navigator.serviceWorker.register("./sw.js?v=2.0.0").catch(console.warn);
+    navigator.serviceWorker.register("./sw.js?v=2.2.0").catch(console.warn);
   }
 }
 
@@ -132,6 +160,18 @@ async function enterApp(){
   $("#appShell").classList.remove("hidden");
   await refreshData(false);
   selectInitialAgent();
+
+  if(C.mode==="excel-direct" && !state.selectedAgent){
+    $("#appShell").classList.add("hidden");
+    $("#loginScreen").classList.remove("hidden");
+    $("#loginTitle").textContent="Compte non associé";
+    $("#loginDetail").textContent=`Le compte ${state.user?.email||""} n'est associé à aucun agent. Renseigne cette adresse dans la colonne Email de tblApp_Agents.`;
+    $("#btnMicrosoftLogin").textContent="Changer de compte Microsoft 365";
+    $("#btnMicrosoftLogin").classList.remove("hidden");
+    $("#setupProductionLink").classList.add("hidden");
+    return;
+  }
+
   configureRole();
   renderAll();
   maybeShowInstallTip();
@@ -140,13 +180,14 @@ async function enterApp(){
 async function refreshData(showToast=true){
   busy(true,"Actualisation des données…");
   try{
-    const [agents,slots,assignments,publications,locks,availability] = await Promise.all([
+    const [agents,slots,assignments,publications,locks,availability,syncInfo] = await Promise.all([
       state.repo.getAgents(),
       state.repo.getSlots(),
       state.repo.getAssignments(),
       state.repo.getPublications(),
       state.repo.getLocks(),
-      state.repo.getAllAvailability()
+      state.repo.getAllAvailability(),
+      state.repo.getLastSyncInfo ? state.repo.getLastSyncInfo() : Promise.resolve(null)
     ]);
     state.agents=agents.filter(a=>a.Actif!==false && norm(a.Actif)!=="FALSE");
     state.slots=slots.filter(s=>s.Actif!==false && norm(s.Actif)!=="FALSE");
@@ -154,6 +195,8 @@ async function refreshData(showToast=true){
     state.publications=publications;
     state.locks=locks;
     state.allAvailability=availability;
+    state.excelSync=syncInfo;
+    state.pendingSubmissions=Number(syncInfo?.pending||0);
     setLastSync();
     if(showToast) toast("Données actualisées","success");
   }catch(err){
@@ -161,15 +204,28 @@ async function refreshData(showToast=true){
   }finally{busy(false)}
 }
 
+function canBootstrapAdmin(email){
+  return !!(
+    email &&
+    C.roles.adminEmails.map(norm).includes(norm(email)) &&
+    C.bootstrap?.adminAgentCode
+  );
+}
+
 function selectInitialAgent(){
   const saved=localStorage.getItem("gardes-v2-agent");
   let matched=null;
 
-  if(C.mode==="m365" && C.ui.autoSelectAgentFromEmail && state.user?.email){
+  if((C.mode==="m365" || C.mode==="excel-direct") && C.ui.autoSelectAgentFromEmail && state.user?.email){
     matched=state.agents.find(a=>norm(a.Email)===norm(state.user.email));
+
+    if(!matched && canBootstrapAdmin(state.user.email)){
+      matched=state.agents.find(a=>norm(a.Code)===norm(C.bootstrap.adminAgentCode));
+    }
+  }else{
+    if(saved) matched=state.agents.find(a=>String(a.Code)===saved);
+    if(!matched) matched=state.agents[0];
   }
-  if(!matched && saved) matched=state.agents.find(a=>String(a.Code)===saved);
-  if(!matched) matched=state.agents.find(a=>norm(a.Title)==="CHOULET FANNY") || state.agents[0];
 
   state.selectedAgent=matched||null;
   if(state.selectedAgent) localStorage.setItem("gardes-v2-agent",state.selectedAgent.Code);
@@ -185,11 +241,13 @@ function configureRole(){
   $("#shortcutAdmin").classList.toggle("hidden",!canAdmin());
 
   const hideSelector=
-    C.mode==="m365" &&
+    (C.mode==="m365" || C.mode==="excel-direct") &&
     C.ui.hideAgentSelectorForMatchedM365User &&
     state.selectedAgent &&
-    norm(state.selectedAgent.Email)===norm(state.user?.email) &&
-    !manage;
+    (
+      norm(state.selectedAgent.Email)===norm(state.user?.email) ||
+      canBootstrapAdmin(state.user?.email)
+    );
 
   $("#agentCard").classList.toggle("hidden",hideSelector);
 }
@@ -235,7 +293,7 @@ function bindStatic(){
 function updateOnlineState(){
   const online=isOnline();
   $("#onlineDot").classList.toggle("offline",!online);
-  $("#connectionText").textContent=online ? (C.mode==="demo"?"En ligne · données locales":"En ligne · Microsoft 365") : "Hors ligne";
+  $("#connectionText").textContent=online ? (C.mode==="demo"?"En ligne · données locales":"En ligne · Excel / Microsoft 365") : "Hors ligne";
 }
 
 async function refreshAndRender(screen=""){
@@ -375,7 +433,16 @@ function openReplacementDialog(slotId){
 async function saveSlot(slotId,value,replCode,replName){
   const slot=state.slots.find(s=>String(s.CreneauId||s.id)===String(slotId));
   if(!slot || !state.selectedAgent) return;
-  busy(true,"Enregistrement…");
+
+  if(C.mode==="excel-direct" &&
+     norm(state.selectedAgent.Email)!==norm(state.user?.email) &&
+     !canBootstrapAdmin(state.user?.email) &&
+     !(canAdmin() && C.ui.allowAdminEditAgents)){
+    toast("Tu ne peux modifier que tes propres disponibilités.","error");
+    return;
+  }
+
+  busy(true,"Enregistrement dans Excel…");
   try{
     const normalizedValue =
       value==="DISPO" ? "1" :
@@ -405,17 +472,18 @@ async function applyWholeBlockAvailable(){
   if(!slots.length || !state.selectedAgent) return;
   busy(true,`Mise à jour de ${state.selectedBlock}…`);
   try{
-    for(const slot of slots){
-      await state.repo.saveAvailability({
-        AgentCode:state.selectedAgent.Code,
-        AgentNom:state.selectedAgent.Title,
-        CreneauId:String(slot.CreneauId||slot.id),
-        DateGarde:slot.DateGarde||"",
-        Date:dateOnly(slot.Date),
-        HeureDebut:slot.HeureDebut||"",
-        Valeur:"1",RemplacantCode:"",RemplacantNom:""
-      });
-    }
+    const payloads=slots.map(slot=>({
+      AgentCode:state.selectedAgent.Code,
+      AgentNom:state.selectedAgent.Title,
+      CreneauId:String(slot.CreneauId||slot.id),
+      DateGarde:slot.DateGarde||"",
+      Date:dateOnly(slot.Date),
+      HeureDebut:slot.HeureDebut||"",
+      Valeur:"1",RemplacantCode:"",RemplacantNom:""
+    }));
+
+    if(state.repo.saveAvailabilityBatch) await state.repo.saveAvailabilityBatch(payloads);
+    else for(const payload of payloads) await state.repo.saveAvailability(payload);
     state.allAvailability=await state.repo.getAllAvailability();
     renderAvailability();
     toast("Toute la plage est disponible","success");
@@ -545,6 +613,7 @@ async function toggleLock(){
 
 async function publishGuard(){
   if(!canManage()) return;
+  if(!confirm(`Publier et geler la garde du ${fmtDateLong(state.chefDay)} · ${state.chefBlock} ?`)) return;
   const rows=state.assignments.filter(a=>
     (a.DateGarde||dateOnly(a.Date))===state.chefDay &&
     a.Bloc===state.chefBlock
@@ -556,7 +625,7 @@ async function publishGuard(){
       assignments:rows
     },state.user?.email||"");
     state.publications=await state.repo.getPublications();
-    toast("Publication enregistrée","success");
+    toast("Demande de publication envoyée à Excel","success");
     renderGuard();
   }catch(err){toast(err.message,"error")}
   finally{busy(false)}
@@ -565,11 +634,12 @@ async function publishGuard(){
 function renderAdmin(){
   if(!canAdmin()) return;
   $("#adminStats").innerHTML=[
-    ["Mode",C.mode==="demo"?"DÉMO":"M365"],
+    ["Mode",C.mode==="demo"?"DÉMO":"EXCEL DIRECT"],
     ["Agents",state.agents.length],
     ["Créneaux",state.slots.length],
     ["Affectations",state.assignments.length],
     ["Dispos",state.allAvailability.length],
+    ["Saisies attente",state.pendingSubmissions],
     ["Version",C.version],
     ["Utilisateur",state.user?.email||"local"],
     ["Rôle",state.role]
@@ -580,19 +650,47 @@ function renderAdmin(){
 async function renderDiagnostics(){
   const tests=[
     ["Application HTTPS",location.protocol==="https:"||location.hostname==="localhost"],
+    ["Mode PRODUCTION",norm(C.environment)==="PRODUCTION"],
+    ["Configuration chargée",C.productionReady===true],
     ["Service Worker","serviceWorker" in navigator],
-    ["Mode autonome iPhone",standalone()],
     ["Connexion réseau",navigator.onLine],
-    ["Liste Agents",state.agents.length>0],
-    ["Liste Créneaux",state.slots.length>0],
-    ["Liste Affectations",state.assignments.length>0]
+    ["Agents Excel",state.agents.length>0],
+    ["Créneaux Excel",state.slots.length>0],
+    ["Affectations Excel",state.assignments.length>0],
+    ["Compte associé",!!state.selectedAgent]
   ];
-  if(C.mode==="m365"){
-    tests.push(["Tenant configuré",C.microsoft365.tenantId!=="A_COMPLETER"]);
-    tests.push(["Client ID configuré",C.microsoft365.clientId!=="A_COMPLETER"]);
-    tests.push(["Site SharePoint configuré",!C.sharePoint.hostname.startsWith("A_COMPLETER")]);
+
+  if(C.mode==="excel-direct"){
+    tests.push(["Tenant Microsoft configuré",!!C.microsoft365.tenantId]);
+    tests.push(["Client ID configuré",!!C.microsoft365.clientId]);
+    tests.push(["Drive ID configuré",!!C.excelDirect.driveId]);
+    tests.push(["Item ID configuré",!!C.excelDirect.itemId]);
+
+    try{
+      state.health=await state.repo.healthCheck();
+      const tableValues=Object.values(state.health.tables||{});
+      tests.push(["Fichier Excel accessible",!!state.health.file?.id]);
+      tests.push(["Toutes les tables tblApp_* accessibles",tableValues.length>0 && tableValues.every(x=>x.ok)]);
+
+      const syncRaw=state.health.sync?.timestamp||"";
+      const syncDate=syncRaw ? new Date(syncRaw) : null;
+      const ageMin=syncDate && !Number.isNaN(syncDate.valueOf())
+        ? (Date.now()-syncDate.getTime())/60000
+        : Infinity;
+
+      tests.push([
+        `Synchro Excel < ${C.excelDirect.maxExcelSyncAgeMinutes} min`,
+        ageMin <= C.excelDirect.maxExcelSyncAgeMinutes
+      ]);
+    }catch(err){
+      console.error(err);
+      tests.push(["Test Microsoft Graph / Excel",false]);
+    }
   }
-  $("#diagnosticList").innerHTML=tests.map(([name,ok])=>`<div class="diag-row"><span>${esc(name)}</span><span class="${ok?"diag-ok":"diag-warn"}">${ok?"OK":"À configurer"}</span></div>`).join("");
+
+  $("#diagnosticList").innerHTML=tests.map(([name,ok])=>
+    `<div class="diag-row"><span>${esc(name)}</span><span class="${ok?"diag-ok":"diag-warn"}">${ok?"OK":"À vérifier"}</span></div>`
+  ).join("");
 }
 
 function clearDemoData(){
