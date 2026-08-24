@@ -916,8 +916,31 @@ class ExcelDirectRepository {
     const rows=await this.tableObjects("submissions",true);
     return rows.filter(r=>{
       const s=norm(r.StatutSync);
-      return ["A_IMPORTER","EN_ATTENTE","IMPORTE"].includes(s);
+      return ["A_IMPORTER","EN_ATTENTE"].includes(s);
     });
+  }
+
+  async getPendingCommands(){
+    const rows=await this.tableObjects("commands",true);
+    return rows.filter(r=>norm(r.Statut)==="A_TRAITER");
+  }
+
+  async getPendingLocks(){
+    const rows=await this.tableObjects("locks",true);
+    return rows.filter(r=>norm(r.StatutSync)==="A_APPLIQUER");
+  }
+
+  async getSyncErrors(){
+    const [submissions,commands,locks]=await Promise.all([
+      this.tableObjects("submissions",true),
+      this.tableObjects("commands",true),
+      this.tableObjects("locks",true)
+    ]);
+    return [
+      ...submissions.filter(r=>norm(r.StatutSync)==="ERREUR"),
+      ...commands.filter(r=>norm(r.Statut)==="ERREUR"),
+      ...locks.filter(r=>norm(r.StatutSync).startsWith("ERREUR"))
+    ];
   }
 
   mergeAvailability(mirror,pending){
@@ -1032,7 +1055,7 @@ class ExcelDirectRepository {
     return row;
   }
 
-  async addCommand(command,date="",bloc="",userEmail=""){
+  async addCommand(command,date="",bloc="",userEmail="",message=""){
     const row={
       ID:`CMD-${Date.now()}-${Math.random().toString(16).slice(2,8)}`,
       Commande:command,
@@ -1042,10 +1065,28 @@ class ExcelDirectRepository {
       DemandeAt:new Date().toISOString(),
       Statut:"A_TRAITER",
       TraiteAt:"",
-      Message:""
+      Message:message||""
     };
     await this.appendRows("commands",[row]);
     return row;
+  }
+
+  async saveAssignmentChange(payload){
+    const clean=v=>String(v??"").replace(/[|\r\n]/g," ").trim();
+    const message=[
+      `PIQUET=${clean(payload.Piquet)}`,
+      `ROLE=${clean(payload.Role)}`,
+      `AGENTCODE=${clean(payload.AgentCode)}`,
+      `AGENTNOM=${clean(payload.AgentNom)}`
+    ].join("|");
+
+    return this.addCommand(
+      "MODIFIER_AFFECTATION",
+      payload.DateGarde||"",
+      payload.Bloc||"",
+      this.account?.username||"",
+      message
+    );
   }
 
   async publish(type,data,userEmail){
@@ -1095,9 +1136,17 @@ class ExcelDirectRepository {
       .sort();
 
     const last=timestamps.at(-1)||"";
+    const [pendingSubmissions,pendingCommands,pendingLocks,errors]=await Promise.all([
+      this.getPendingSubmissions(),
+      this.getPendingCommands(),
+      this.getPendingLocks(),
+      this.getSyncErrors()
+    ]);
+
     return {
       timestamp:last,
-      pending:(await this.getPendingSubmissions()).length
+      pending:pendingSubmissions.length + pendingCommands.length + pendingLocks.length,
+      errors:errors.length
     };
   }
 

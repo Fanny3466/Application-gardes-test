@@ -12,18 +12,18 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="icon" href="assets/icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=2.3.5">
+  <link rel="stylesheet" href="styles.css?v=2.4.0">
   <script>
     window.addEventListener("error", function(e){
       var b=document.getElementById("bootFallback");
-      if(b){b.innerHTML='<div style="max-width:520px"><h2>Erreur de chargement</h2><p style="color:#667786">'+String(e.message||"Erreur JavaScript")+'</p><p style="font-size:12px;color:#8A98A3">Recharge la page après avoir remplacé les fichiers V2.3.5.</p></div>';}
+      if(b){b.innerHTML='<div style="max-width:520px"><h2>Erreur de chargement</h2><p style="color:#667786">'+String(e.message||"Erreur JavaScript")+'</p><p style="font-size:12px;color:#8A98A3">Recharge la page après avoir remplacé les fichiers V2.4.0.</p></div>';}
     });
   </script>
-  <script src="production-config.js?v=2.3.5" defer></script>
-  <script src="config.js?v=2.3.5" defer></script>
-  <script src="profile.js?v=2.3.5" defer></script>
-  <script src="repositories.js?v=2.3.5" defer></script>
-  <script src="app.js?v=2.3.5" defer></script>
+  <script src="production-config.js?v=2.4.0" defer></script>
+  <script src="config.js?v=2.4.0" defer></script>
+  <script src="profile.js?v=2.4.0" defer></script>
+  <script src="repositories.js?v=2.4.0" defer></script>
+  <script src="app.js?v=2.4.0" defer></script>
 </head>
 <body>
   <div id="bootFallback" style="position:fixed;inset:0;z-index:9999;display:grid;place-content:center;text-align:center;background:#F3F7FB;color:#17212B;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;padding:24px">
@@ -187,7 +187,7 @@
           <details><summary>2 · Saisir les disponibilités</summary><p>Choisis le jour puis la plage horaire. Touche chaque heure ou utilise <b>Toute la plage</b>. Les statuts correspondent aux valeurs reconnues par le classeur Excel.</p></details>
           <details><summary>3 · Déclarer un remplaçant</summary><p>Choisis <b>Remplaçant</b>, puis la personne concernée. La saisie est envoyée dans <b>tblApp_Saisies</b> du classeur Excel, puis le module VBA la reprend dans <b>Demande dispo</b>.</p></details>
           <details><summary>4 · Feuille de garde</summary><p>La vue <b>Garde</b> lit les affectations publiées par le classeur. Les postes non pourvus restent visibles si l’option correspondante est activée.</p></details>
-          <details><summary>5 · Chef de garde / Adjoint</summary><p>La matrice conserve la première colonne et les heures pendant le défilement. Les actions <b>Verrouiller</b>, <b>Publier</b> et <b>Actualiser</b> écrivent directement dans les tables techniques du classeur Excel.</p></details>
+          <details><summary>5 · Chef / Admin : corrections directes</summary><p>Les rôles <b>CHEF</b> et <b>ADMIN</b> peuvent toucher une cellule de la matrice pour corriger la disponibilité d'un agent. Dans <b>Garde</b>, ils peuvent aussi changer directement la personne affectée à chaque piquet. Les modifications sont envoyées au classeur Excel et reprises au prochain cycle de synchronisation.</p></details>
           <details><summary>6 · Installer sur iPhone</summary><p>Ouvre l’application dans Safari → <b>Partager</b> → <b>Sur l’écran d’accueil</b>. Le bandeau d’installation disparaît automatiquement lorsque l’application est déjà ouverte en mode autonome.</p></details>
           <details><summary>7 · Chaîne de synchronisation</summary><ol><li>iPhone → <b>tblApp_Saisies</b> dans le fichier Excel.</li><li>Excel Desktop détecte la nouvelle saisie.</li><li>VBA → <b>Demande dispo</b> puis <b>Remplir_Feuille_Gardes_En_W</b>.</li><li><b>Mois complet (Diffusion)</b> → <b>tblApp_Affectations</b>.</li><li>L’application relit directement le résultat via Microsoft Graph.</li></ol></details>
         </div>

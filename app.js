@@ -23,6 +23,7 @@ const state={
   lastSync:null,
   excelSync:null,
   pendingSubmissions:0,
+  syncErrors:0,
   health:null
 };
 
@@ -43,9 +44,11 @@ function setLastSync(){
   const dt=parseExcelDateTime(raw);
   const valid=!!dt;
 
+  const waiting=state.pendingSubmissions ? ` · ${state.pendingSubmissions} en attente` : "";
+  const errors=state.syncErrors ? ` · ${state.syncErrors} erreur${state.syncErrors>1?"s":""}` : "";
   $("#btnSyncMini").textContent=valid
-    ? `Excel : ${dt.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}${state.pendingSubmissions?` · ${state.pendingSubmissions} en attente`:""}`
-    : `Actualisé : ${state.lastSync.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}`;
+    ? `Excel : ${dt.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}${waiting}${errors}`
+    : `Actualisé : ${state.lastSync.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}${waiting}${errors}`;
 }
 function standalone(){
   return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true;
@@ -125,6 +128,7 @@ function getRole(agent){
   return "AGENT";
 }
 function canManage(){ return ["ADMIN","CHEF","ADJOINT"].includes(state.role); }
+function canEditOperationalData(){ return ["ADMIN","CHEF"].includes(state.role); }
 function canAdmin(){ return state.role==="ADMIN"; }
 
 async function init(){
@@ -189,7 +193,7 @@ async function init(){
   }
 
   if("serviceWorker" in navigator){
-    navigator.serviceWorker.register("./sw.js?v=2.3.5").catch(console.warn);
+    navigator.serviceWorker.register("./sw.js?v=2.4.0").catch(console.warn);
   }
 }
 
@@ -235,6 +239,7 @@ async function refreshData(showToast=true){
     state.allAvailability=availability;
     state.excelSync=syncInfo;
     state.pendingSubmissions=Number(syncInfo?.pending||0);
+    state.syncErrors=Number(syncInfo?.errors||0);
     setLastSync();
     if(showToast) toast("Données actualisées","success");
   }catch(err){
@@ -251,7 +256,7 @@ function canBootstrapAdmin(email){
 }
 
 function selectInitialAgent(){
-  const saved=localStorage.getItem("gardes-v2-agent");
+  const savedTarget=localStorage.getItem("gardes-v2-agent");
   let matched=null;
 
   if((C.mode==="m365" || C.mode==="excel-direct") && C.ui.autoSelectAgentFromEmail && state.user?.email){
@@ -261,17 +266,23 @@ function selectInitialAgent(){
       matched=state.agents.find(a=>norm(a.Code)===norm(C.bootstrap.adminAgentCode));
     }
   }else{
-    if(saved) matched=state.agents.find(a=>String(a.Code)===saved);
-    if(!matched) matched=state.agents[0];
+    matched=state.agents[0]||null;
   }
 
-  state.selectedAgent=matched||null;
+  state.authAgent=matched||null;
+  state.role=getRole(state.authAgent);
+
+  if(canEditOperationalData() && savedTarget){
+    state.selectedAgent=state.agents.find(a=>String(a.Code)===String(savedTarget)) || state.authAgent;
+  }else{
+    state.selectedAgent=state.authAgent;
+  }
+
   if(state.selectedAgent) localStorage.setItem("gardes-v2-agent",state.selectedAgent.Code);
-  state.role=getRole(state.selectedAgent);
 }
 
 function configureRole(){
-  state.role=getRole(state.selectedAgent);
+  state.role=getRole(state.authAgent);
   const manage=canManage();
   $("#navChef").classList.toggle("hidden",!manage);
   $("#shortcutChef").classList.toggle("hidden",!manage);
@@ -279,11 +290,12 @@ function configureRole(){
   $("#shortcutAdmin").classList.toggle("hidden",!canAdmin());
 
   const hideSelector=
+    !canEditOperationalData() &&
     (C.mode==="m365" || C.mode==="excel-direct") &&
     C.ui.hideAgentSelectorForMatchedM365User &&
-    state.selectedAgent &&
+    state.authAgent &&
     (
-      norm(state.selectedAgent.Email)===norm(state.user?.email) ||
+      norm(state.authAgent.Email)===norm(state.user?.email) ||
       canBootstrapAdmin(state.user?.email)
     );
 
@@ -304,7 +316,7 @@ function bindStatic(){
   $("#agentSelect").addEventListener("change",e=>{
     state.selectedAgent=state.agents.find(a=>String(a.Code)===e.target.value)||null;
     if(state.selectedAgent) localStorage.setItem("gardes-v2-agent",state.selectedAgent.Code);
-    configureRole();renderHome();renderAvailability();
+    renderHome();renderAvailability();
   });
 
   $("#dismissInstallTip").addEventListener("click",()=>{
@@ -376,10 +388,12 @@ function renderHome(){
   $("#agentMeta").innerHTML=a ? [
     `<span class="meta-chip">${esc(a.Code||"")}</span>`,
     a.Fonctions?`<span class="meta-chip">${esc(a.Fonctions)}</span>`:"",
-    `<span class="meta-chip">${esc(state.role)}</span>`
+    `<span class="meta-chip">${esc(state.role)}</span>`,
+    canEditOperationalData() && state.authAgent && a?.Code!==state.authAgent.Code
+      ? `<span class="meta-chip">Édition par ${esc(state.authAgent.Title)}</span>` : ""
   ].join("") : "";
 
-  const initials=(a?.Title||state.user?.name||"AG").split(/\s+/).map(x=>x[0]).slice(0,2).join("").toUpperCase();
+  const initials=(state.authAgent?.Title||state.user?.name||"AG").split(/\s+/).map(x=>x[0]).slice(0,2).join("").toUpperCase();
   $("#btnUser").textContent=initials||"AG";
 }
 
@@ -443,53 +457,99 @@ function renderAvailability(){
 }
 
 function openStatusDialog(slotId){
+  if(!state.selectedAgent) return;
+  openStatusDialogForAgent(state.selectedAgent.Code,slotId);
+}
+
+function openStatusDialogForAgent(agentCode,slotId){
+  const target=state.agents.find(a=>String(a.Code)===String(agentCode));
+  if(!target) return;
+
   const dlg=$("#statusDialog");
   dlg.dataset.slot=slotId;
+  dlg.dataset.agent=agentCode;
+  const title=dlg.querySelector("h3");
+  if(title) title.textContent=`Disponibilité · ${target.Title}`;
+
   $("#statusDialogList").innerHTML=P.statusCatalog.map(s=>`<button class="picker-btn" data-status="${esc(s.value)}"><b>${s.icon} ${esc(s.label)}</b></button>`).join("")+
     `<button class="picker-btn destructive" data-status="CLEAR"><b>Effacer la réponse</b></button>`;
+
   $$("#statusDialogList [data-status]").forEach(b=>b.addEventListener("click",async()=>{
     const value=b.dataset.status;
-    if(value==="REMPLACANT"){dlg.close();openReplacementDialog(slotId);return}
-    await saveSlot(slotId,value==="CLEAR"?"":value,"","");
+    if(value==="REMPLACANT"){
+      dlg.close();
+      openReplacementDialogForAgent(agentCode,slotId);
+      return;
+    }
+    await saveSlotForAgent(agentCode,slotId,value==="CLEAR"?"":value,"","");
     dlg.close();
   }));
   dlg.showModal();
 }
 
 function openReplacementDialog(slotId){
+  if(!state.selectedAgent) return;
+  openReplacementDialogForAgent(state.selectedAgent.Code,slotId);
+}
+
+function openReplacementDialogForAgent(agentCode,slotId){
+  const target=state.agents.find(a=>String(a.Code)===String(agentCode));
+  if(!target) return;
+
   const dlg=$("#replacementDialog");
-  $("#replacementDialogList").innerHTML=state.agents.filter(a=>a.Code!==state.selectedAgent?.Code).map(a=>
+  const title=dlg.querySelector("h3");
+  if(title) title.textContent=`Remplaçant de ${target.Title}`;
+
+  $("#replacementDialogList").innerHTML=state.agents.filter(a=>String(a.Code)!==String(agentCode)).map(a=>
     `<button class="picker-btn" data-repl="${esc(a.Code)}"><b>${esc(a.Title)}</b><small>${esc(a.Fonctions||"")} · ${esc(a.Code)}</small></button>`
   ).join("");
+
   $$("#replacementDialogList [data-repl]").forEach(b=>b.addEventListener("click",async()=>{
-    const a=state.agents.find(x=>x.Code===b.dataset.repl);
-    await saveSlot(slotId,a?.Code||"",a?.Code||"",a?.Title||"");
+    const a=state.agents.find(x=>String(x.Code)===String(b.dataset.repl));
+    await saveSlotForAgent(agentCode,slotId,a?.Code||"",a?.Code||"",a?.Title||"");
     dlg.close();
   }));
   dlg.showModal();
 }
 
-async function saveSlot(slotId,value,replCode,replName){
-  const slot=state.slots.find(s=>String(s.CreneauId||s.id)===String(slotId));
-  if(!slot || !state.selectedAgent) return;
+async function refreshSyncBadge(){
+  if(!state.repo.getLastSyncInfo) return;
+  try{
+    state.excelSync=await state.repo.getLastSyncInfo();
+    state.pendingSubmissions=Number(state.excelSync?.pending||0);
+    state.syncErrors=Number(state.excelSync?.errors||0);
+    setLastSync();
+  }catch(err){
+    console.warn("refreshSyncBadge",err);
+  }
+}
 
-  if(C.mode==="excel-direct" &&
-     norm(state.selectedAgent.Email)!==norm(state.user?.email) &&
-     !canBootstrapAdmin(state.user?.email) &&
-     !(canAdmin() && C.ui.allowAdminEditAgents)){
-    toast("Tu ne peux modifier que tes propres disponibilités.","error");
+async function saveSlot(slotId,value,replCode,replName){
+  if(!state.selectedAgent) return;
+  return saveSlotForAgent(state.selectedAgent.Code,slotId,value,replCode,replName);
+}
+
+async function saveSlotForAgent(agentCode,slotId,value,replCode,replName){
+  const slot=state.slots.find(s=>String(s.CreneauId||s.id)===String(slotId));
+  const target=state.agents.find(a=>String(a.Code)===String(agentCode));
+  if(!slot || !target) return;
+
+  const ownAgent=
+    state.authAgent &&
+    norm(target.Code)===norm(state.authAgent.Code);
+
+  if(C.mode==="excel-direct" && !ownAgent && !canEditOperationalData()){
+    toast("Seuls les rôles CHEF et ADMIN peuvent modifier les disponibilités d'un autre agent.","error");
     return;
   }
 
   busy(true,"Enregistrement dans Excel…");
   try{
-    const normalizedValue =
-      value==="DISPO" ? "1" :
-      value;
+    const normalizedValue=value==="DISPO" ? "1" : value;
 
     await state.repo.saveAvailability({
-      AgentCode:state.selectedAgent.Code,
-      AgentNom:state.selectedAgent.Title,
+      AgentCode:target.Code,
+      AgentNom:target.Title,
       CreneauId:String(slot.CreneauId||slot.id),
       DateGarde:dateOnly(slot.DateGarde||slot.Date),
       Date:dateOnly(slot.Date),
@@ -498,17 +558,25 @@ async function saveSlot(slotId,value,replCode,replName){
       RemplacantCode:replCode||"",
       RemplacantNom:replName||""
     });
+
     state.allAvailability=await state.repo.getAllAvailability();
+    await refreshSyncBadge();
     renderAvailability();
     if(canManage()) renderChef();
-    toast("Disponibilité enregistrée","success");
-  }catch(err){console.error(err);toast(err.message,"error")}
-  finally{busy(false)}
+    toast(`Disponibilité enregistrée pour ${target.Title}`,"success");
+  }catch(err){
+    console.error(err);toast(err.message,"error");
+  }finally{busy(false)}
 }
 
 async function applyWholeBlockAvailable(){
   const slots=slotsFor(state.selectedDay,state.selectedBlock);
   if(!slots.length || !state.selectedAgent) return;
+  const ownAgent=state.authAgent && norm(state.selectedAgent.Code)===norm(state.authAgent.Code);
+  if(!ownAgent && !canEditOperationalData()){
+    toast("Seuls les rôles CHEF et ADMIN peuvent modifier les disponibilités d'un autre agent.","error");
+    return;
+  }
   busy(true,`Mise à jour de ${state.selectedBlock}…`);
   try{
     const payloads=slots.map(slot=>({
@@ -524,8 +592,10 @@ async function applyWholeBlockAvailable(){
     if(state.repo.saveAvailabilityBatch) await state.repo.saveAvailabilityBatch(payloads);
     else for(const payload of payloads) await state.repo.saveAvailability(payload);
     state.allAvailability=await state.repo.getAllAvailability();
+    await refreshSyncBadge();
     renderAvailability();
-    toast("Toute la plage est disponible","success");
+    if(canManage()) renderChef();
+    toast(`Toute la plage est disponible pour ${state.selectedAgent.Title}`,"success");
   }catch(err){toast(err.message,"error")}
   finally{busy(false)}
 }
@@ -537,6 +607,60 @@ function assignmentBlocks(day){
   const values=[...new Set(state.assignments.filter(a=>dateOnly(a.DateGarde||a.Date)===day).map(a=>a.Bloc).filter(Boolean))];
   return P.blockOrder.filter(b=>values.includes(b)).concat(values.filter(b=>!P.blockOrder.includes(b)));
 }
+function assignmentAgentOptions(currentCode="",currentName=""){
+  const options=[`<option value="">— Aucun —</option>`];
+  for(const a of state.agents){
+    const selected=String(a.Code)===String(currentCode) ? " selected" : "";
+    options.push(`<option value="${esc(a.Code)}"${selected}>${esc(a.Title)}</option>`);
+  }
+  return options.join("");
+}
+
+async function saveAssignmentFromGuard(piquet,role,agentCode){
+  if(!canEditOperationalData()) return;
+
+  const agent=state.agents.find(a=>String(a.Code)===String(agentCode))||null;
+  busy(true,"Modification de l'affectation…");
+
+  try{
+    await state.repo.saveAssignmentChange({
+      DateGarde:state.guardDay,
+      Bloc:state.guardBlock,
+      Piquet:piquet,
+      Role:role,
+      AgentCode:agent?.Code||"",
+      AgentNom:agent?.Title||""
+    });
+
+    const row=state.assignments.find(a=>
+      dateOnly(a.DateGarde||a.Date)===state.guardDay &&
+      norm(a.Bloc)===norm(state.guardBlock) &&
+      norm(a.Piquet)===norm(piquet) &&
+      norm(a.Role)===norm(role)
+    );
+
+    if(row){
+      row.AgentCode=agent?.Code||"";
+      row.AgentNom=agent?.Title||"";
+      row.ModifiedAt=new Date().toISOString();
+    }
+
+    await refreshSyncBadge();
+    renderGuard();
+    toast(
+      agent
+        ? `${piquet} ${role} → ${agent.Title} envoyé à Excel`
+        : `${piquet} ${role} vidé dans Excel`,
+      "success"
+    );
+  }catch(err){
+    console.error(err);
+    toast(err.message,"error");
+  }finally{
+    busy(false);
+  }
+}
+
 function renderGuard(){
   const days=assignmentDays();
   if(!days.length){
@@ -567,9 +691,15 @@ function renderGuard(){
     const crew=v.roles.map(role=>{
       const a=byKey[`${norm(v.key)}|${norm(role)}`] || byKey[`${norm(v.vehicle)}|${norm(role)}`];
       const name=a?.AgentNom||"";
+      const assignmentControl=canEditOperationalData()
+        ? `<select class="crew-assignment-select" data-piquet="${esc(v.key)}" data-role="${esc(role)}">
+             ${assignmentAgentOptions(a?.AgentCode||"",name)}
+           </select>`
+        : `<span class="crew-name ${name?"":"crew-empty"}">${name?esc(name):"— À compléter —"}</span>`;
+
       return `<div class="crew-row">
         <span class="crew-role">${esc(role)}</span>
-        <span class="crew-name ${name?"":"crew-empty"}">${name?esc(name):"— À compléter —"}</span>
+        ${assignmentControl}
         ${a?.Partiel===true||norm(a?.Partiel)==="TRUE"?'<span class="partial-chip">partiel</span>':"<span></span>"}
       </div>`;
     }).join("");
@@ -578,6 +708,20 @@ function renderGuard(){
       ${crew}
     </section>`;
   }).join("");
+
+  if(canEditOperationalData()){
+    $$("#guardGrid .crew-assignment-select").forEach(select=>{
+      const piquet=select.dataset.piquet;
+      const role=select.dataset.role;
+      const row=byKey[`${norm(piquet)}|${norm(role)}`];
+      const selectedCode=row?.AgentCode||"";
+      select.value=selectedCode;
+
+      select.addEventListener("change",()=>saveAssignmentFromGuard(
+        piquet,role,select.value
+      ));
+    });
+  }
 
   const pub=[...state.publications].sort((a,b)=>String(b.PublishedAt||"").localeCompare(String(a.PublishedAt||"")))[0];
   const pubDate=parseExcelDateTime(pub?.PublishedAt);
@@ -620,9 +764,18 @@ function renderChef(){
         const id=String(s.CreneauId||s.id);
         const v=maps[a.Code]?.[id]||{};
         const meta=statusMeta(v.Valeur,v.RemplacantCode);
-        return `<td><i class="matrix-mark ${meta.className}" title="${esc(meta.label)}">${meta.icon}</i></td>`;
+        const editable=canEditOperationalData() ? " matrix-editable" : "";
+        return `<td class="${editable.trim()}" data-agent="${esc(a.Code)}" data-slot="${esc(id)}"><i class="matrix-mark ${meta.className}" title="${esc(meta.label)}">${meta.icon}</i></td>`;
       }).join("")}
     </tr>`).join("")+"</tbody>";
+
+  if(canEditOperationalData()){
+    $$("#chefMatrix td.matrix-editable").forEach(cell=>{
+      cell.addEventListener("click",()=>openStatusDialogForAgent(
+        cell.dataset.agent,cell.dataset.slot
+      ));
+    });
+  }
 
   const lock=currentLock(state.chefDay,state.chefBlock);
   $("#lockBadge").textContent=lock ? "Verrouillé" : "Non verrouillé";
@@ -679,7 +832,7 @@ function renderAdmin(){
     ["Créneaux",state.slots.length],
     ["Affectations",state.assignments.length],
     ["Dispos",state.allAvailability.length],
-    ["Saisies attente",state.pendingSubmissions],
+    ["Actions attente",state.pendingSubmissions],
     ["Version",C.version],
     ["Utilisateur",state.user?.email||"local"],
     ["Rôle",state.role]
