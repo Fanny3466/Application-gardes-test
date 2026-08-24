@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Configuration production · Application Gardes</title>
   <link rel="icon" href="assets/icon-192.png">
-  <link rel="stylesheet" href="setup.css?v=2.2.0">
+  <link rel="stylesheet" href="setup.css?v=2.3.1">
 </head>
 <body>
   <main class="setup-shell">
     <header>
       <img src="assets/icon-192.png" alt="">
       <div>
-        <span>APPLICATION GARDES · V2.2.0</span>
+        <span>APPLICATION GARDES · V2.3.1</span>
         <h1>Assistant de mise en production</h1>
         <p>Connexion Microsoft 365 → test du fichier Excel → génération de <code>production-config.js</code>.</p>
       </div>
@@ -48,8 +48,8 @@
 
     <section class="card">
       <h2>3 · Test réel</h2>
-      <button id="btnTest" class="primary">Se connecter à Microsoft 365 et tester</button>
-      <div id="status" class="status">En attente.</div>
+      <div class="actions"><button id="btnTest" class="primary">Se connecter à Microsoft 365 et tester</button><button id="btnResetAuth" type="button">Réinitialiser la connexion</button></div>
+      <p class="hint"><b>Authentification par redirection :</b> cette version n’utilise plus de popup Microsoft. Elle évite ainsi les erreurs <code>interaction_in_progress</code> et <code>block_nested_popups</code>.</p><div id="status" class="status">En attente.</div>
       <div id="checks" class="checks"></div>
     </section>
 
@@ -68,6 +68,6 @@
 
     <footer><a href="./">← Retour à l’application</a></footer>
   </main>
-  <script src="setup.js?v=2.2.0"></script>
+  <script src="setup.js?v=2.3.1"></script>
 </body>
 </html>

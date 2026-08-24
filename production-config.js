@@ -1,30 +1,15 @@
 /*
- * CONFIGURATION DE PRODUCTION
- * ---------------------------
- * Ce fichier est volontairement livré non configuré.
- * Utilise setup.html pour générer automatiquement les identifiants driveId/itemId
- * après authentification Microsoft 365 et test du classeur.
- *
- * IMPORTANT :
- * - aucun clientSecret ne doit être ajouté ici ;
- * - tenantId et clientId d'une SPA ne sont pas des secrets ;
- * - le lien de partage du classeur n'est pas conservé dans la configuration finale.
+ * Application Gardes 3 LLB — configuration de production
+ * Tenant ID et Client ID sont publics pour une SPA. Aucun clientSecret ici.
  */
 window.GARDES_PRODUCTION = {
   configured: false,
-
-  tenantId: "",
-  clientId: "",
-
+  tenantId: "b5849dc4-c17a-4f94-9680-38759588959e",
+  clientId: "e652d620-c4b0-4feb-a426-193ef645c807",
   driveId: "",
   itemId: "",
   workbookName: "",
-
-  // Le compte qui effectue la mise en production est ajouté ici par setup.html.
   adminEmails: [],
-
-  // Pour ce classeur, le code proposé pour l'administratrice initiale est CFa.
   bootstrapAdminAgentCode: "CFa",
-
   maxExcelSyncAgeMinutes: 5
 };

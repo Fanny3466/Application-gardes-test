@@ -1,4 +1,4 @@
-# Mise en production — Application Gardes V2.2.0
+# Mise en production — Application Gardes V2.3.0
 
 ## Architecture retenue
 
@@ -39,9 +39,9 @@ Créer une inscription d'application :
 
 Ne créer aucun client secret pour la PWA.
 
-## Étape 4 — Déployer V2.2.0
+## Étape 4 — Déployer V2.3.0
 
-Remplacer le contenu de la racine GitHub Pages par le contenu du ZIP V2.2.0.
+Remplacer le contenu de la racine GitHub Pages par le contenu du ZIP V2.3.0.
 
 Au premier lancement, l'application affiche **Configuration production requise**.
 

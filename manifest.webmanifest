@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Application Gardes",
-  "short_name": "Gardes",
+  "name": "Application Gardes 3 LLB",
+  "short_name": "Gardes 3 LLB",
   "description": "Disponibilités et feuilles de garde connectées au classeur Excel de référence.",
   "start_url": "./",
   "scope": "./",

@@ -183,6 +183,16 @@ class DemoRepository {
     return this.state.locks[k];
   }
 
+  async saveAgentAccess(agentCode,payload){
+    const agent=P.demoAgents.find(a=>norm(a.Code)===norm(agentCode));
+    if(agent){
+      if(Object.prototype.hasOwnProperty.call(payload,"Email")) agent.Email=payload.Email||"";
+      if(Object.prototype.hasOwnProperty.call(payload,"Role")) agent.Role=payload.Role||"AGENT";
+      if(Object.prototype.hasOwnProperty.call(payload,"Actif")) agent.Actif=payload.Actif;
+    }
+    return agent||null;
+  }
+
   async publish(type,data,userEmail){
     const p={
       id:String(Date.now()),Title:`${type}-${Date.now()}`,Type:type,
@@ -303,6 +313,10 @@ class GraphRepository {
     if(!this.account) return null;
     const me=await this.graph("/me?$select=displayName,mail,userPrincipalName");
     return {name:me.displayName,email:me.mail||me.userPrincipalName};
+  }
+
+  async saveAgentAccess(){
+    throw new Error("Gestion des rôles disponible uniquement en mode Excel Direct.");
   }
 
   async resolveSite(){
@@ -850,6 +864,21 @@ class ExcelDirectRepository {
 
     await this.appendRows("publications",[row]);
     await this.addCommand("PUBLIER_GARDE",data.dateDebut||"",data.bloc||"",userEmail||"");
+    return row;
+  }
+
+  async saveAgentAccess(agentCode,payload){
+    const rows=await this.tableObjects("agents",true);
+    const existing=rows.find(x=>norm(x.Code)===norm(agentCode));
+    if(!existing) throw new Error("Agent introuvable dans tblApp_Agents.");
+
+    const row={...existing};
+    if(Object.prototype.hasOwnProperty.call(payload,"Email")) row.Email=payload.Email||"";
+    if(Object.prototype.hasOwnProperty.call(payload,"Role")) row.Role=(payload.Role||"AGENT").toUpperCase();
+    if(Object.prototype.hasOwnProperty.call(payload,"Actif")) row.Actif=payload.Actif;
+
+    await this.patchRow("agents",existing.__index,row);
+    this.tableCache.delete("agents");
     return row;
   }
 

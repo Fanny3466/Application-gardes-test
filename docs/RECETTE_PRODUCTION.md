@@ -39,4 +39,4 @@ Avant de donner l'application aux agents :
 7. Test cache iPhone
    - fermer / rouvrir la PWA ;
    - actualiser ;
-   - vérifier V2.2.0 et PRODUCTION.
+   - vérifier V2.3.0 et PRODUCTION.

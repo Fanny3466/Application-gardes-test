@@ -151,7 +151,7 @@ async function init(){
   }
 
   if("serviceWorker" in navigator){
-    navigator.serviceWorker.register("./sw.js?v=2.2.0").catch(console.warn);
+    navigator.serviceWorker.register("./sw.js?v=2.3.1").catch(console.warn);
   }
 }
 
@@ -288,6 +288,7 @@ function bindStatic(){
   $("#btnRunDiagnostics").addEventListener("click",renderDiagnostics);
   $("#btnClearDemoData").addEventListener("click",clearDemoData);
   $("#btnLogout").addEventListener("click",()=>state.repo.signOut());
+  const btnRoles=$("#btnRefreshRoles"); if(btnRoles) btnRoles.addEventListener("click",()=>renderRoleManager());
 }
 
 function updateOnlineState(){
@@ -645,6 +646,66 @@ function renderAdmin(){
     ["Rôle",state.role]
   ].map(([a,b])=>`<div class="stat-card"><small>${esc(a)}</small><b>${esc(b)}</b></div>`).join("");
   renderDiagnostics();
+  renderRoleManager();
+}
+
+function roleChoices(current="AGENT"){
+  const roles=["AGENT","ADJOINT","CHEF","ADMIN"];
+  const cur=norm(current)||"AGENT";
+  return roles.map(r=>`<option value="${r}" ${r===cur?"selected":""}>${r}</option>`).join("");
+}
+
+function renderRoleManager(){
+  const host=$("#roleManager");
+  if(!host || !canAdmin()) return;
+  const agents=[...state.agents].sort((a,b)=>String(a.Title||"").localeCompare(String(b.Title||""),"fr"));
+  host.innerHTML=agents.map(a=>`<article class="role-row" data-agent="${esc(a.Code)}">
+    <div class="role-head">
+      <b>${esc(a.Title)}</b>
+      <small>${esc(a.Code)} · ${esc(a.Fonctions||"")}<br>${esc(a.Equipe||C.ui.defaultTeam||"")}</small>
+    </div>
+    <div class="role-fields">
+      <label>Adresse Microsoft 365
+        <input type="email" data-field="email" value="${esc(a.Email||"")}" placeholder="prenom.nom@...">
+      </label>
+      <label>Rôle
+        <select data-field="role">${roleChoices(a.Role||"AGENT")}</select>
+      </label>
+    </div>
+    <div class="role-actions">
+      <button class="btn primary" data-action="save-role" data-code="${esc(a.Code)}">Enregistrer</button>
+    </div>
+  </article>`).join("");
+
+  $$('[data-action="save-role"]',host).forEach(btn=>btn.addEventListener('click',()=>saveRoleRow(btn.dataset.code)));
+}
+
+async function saveRoleRow(agentCode){
+  if(!canAdmin()) return;
+  const row=$(`.role-row[data-agent="${CSS.escape(agentCode)}"]`);
+  if(!row) return;
+  const email=$('[data-field="email"]',row).value.trim();
+  const role=$('[data-field="role"]',row).value.trim().toUpperCase() || 'AGENT';
+
+  const current=state.agents.find(a=>norm(a.Code)===norm(agentCode));
+  const currentAdmins=state.agents.filter(a=>norm(a.Role)==='ADMIN').length;
+  if(norm(current?.Role)==='ADMIN' && role!=='ADMIN' && currentAdmins<=1){
+    toast('Il faut conserver au moins un administrateur.','error');
+    return;
+  }
+
+  busy(true,'Mise à jour des accès…');
+  try{
+    await state.repo.saveAgentAccess(agentCode,{Email:email,Role:role});
+    await refreshData(false);
+    selectInitialAgent();
+    configureRole();
+    renderAll();
+    showScreen('admin');
+    toast('Rôle enregistré dans Excel','success');
+  }catch(err){
+    console.error(err);toast(err.message,'error');
+  }finally{busy(false)}
 }
 
 async function renderDiagnostics(){
