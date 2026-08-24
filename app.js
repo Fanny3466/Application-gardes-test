@@ -40,8 +40,8 @@ function setLastSync(){
   state.lastSync=new Date();
 
   const raw=state.excelSync?.timestamp||"";
-  const dt=raw ? new Date(raw) : null;
-  const valid=dt && !Number.isNaN(dt.valueOf());
+  const dt=parseExcelDateTime(raw);
+  const valid=!!dt;
 
   $("#btnSyncMini").textContent=valid
     ? `Excel : ${dt.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}${state.pendingSubmissions?` · ${state.pendingSubmissions} en attente`:""}`
@@ -51,13 +51,45 @@ function standalone(){
   return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true;
 }
 function isOnline(){ return navigator.onLine; }
-function fmtDate(iso){
+function safeLocalDate(value){
+  const iso=dateOnly(value);
+  if(!iso) return null;
   const d=new Date(`${iso}T12:00:00`);
+  return Number.isFinite(d.valueOf()) ? d : null;
+}
+function fmtDate(value){
+  const d=safeLocalDate(value);
+  if(!d) return "Date inconnue";
   return new Intl.DateTimeFormat("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit"}).format(d);
 }
-function fmtDateLong(iso){
-  const d=new Date(`${iso}T12:00:00`);
+function fmtDateLong(value){
+  const d=safeLocalDate(value);
+  if(!d) return "Date inconnue";
   return new Intl.DateTimeFormat("fr-FR",{weekday:"long",day:"2-digit",month:"long"}).format(d);
+}
+function parseExcelDateTime(value){
+  if(value===null || value===undefined || value==="") return null;
+  if(value instanceof Date) return Number.isFinite(value.valueOf()) ? value : null;
+
+  const raw=String(value).trim();
+  if(!raw) return null;
+
+  let d=new Date(raw);
+  if(Number.isFinite(d.valueOf())) return d;
+
+  const n=Number(raw.replace(",","."));
+  if(Number.isFinite(n) && n>=1 && n<1000000){
+    d=new Date(Date.UTC(1899,11,30)+n*86400000);
+    if(Number.isFinite(d.valueOf())) return d;
+  }
+
+  const m=raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if(m){
+    const y=Number(m[3])<100 ? 2000+Number(m[3]) : Number(m[3]);
+    d=new Date(y,Number(m[2])-1,Number(m[1]),Number(m[4]||0),Number(m[5]||0),Number(m[6]||0));
+    if(Number.isFinite(d.valueOf())) return d;
+  }
+  return null;
 }
 function hourLabel(slot){
   const h=String(slot.HeureDebut||"").slice(0,5);
@@ -151,7 +183,7 @@ async function init(){
   }
 
   if("serviceWorker" in navigator){
-    navigator.serviceWorker.register("./sw.js?v=2.3.3").catch(console.warn);
+    navigator.serviceWorker.register("./sw.js?v=2.3.4").catch(console.warn);
   }
 }
 
@@ -346,11 +378,11 @@ function renderHome(){
 }
 
 function availableDays(){
-  return [...new Set(state.slots.map(s=>s.DateGarde||dateOnly(s.Date)).filter(Boolean))].sort();
+  return [...new Set(state.slots.map(s=>dateOnly(s.DateGarde||s.Date)).filter(Boolean))].sort();
 }
 function slotsFor(day,block){
   return state.slots
-    .filter(s=>(s.DateGarde||dateOnly(s.Date))===day && (!block || s.Bloc===block))
+    .filter(s=>dateOnly(s.DateGarde||s.Date)===day && (!block || s.Bloc===block))
     .sort((a,b)=>(Number(a.Ordre)||0)-(Number(b.Ordre)||0));
 }
 function availabilityFor(agentCode){
@@ -369,10 +401,10 @@ function renderAvailability(){
   if(!state.selectedDay || !days.includes(state.selectedDay)) state.selectedDay=days[0];
 
   $("#dayTabs").innerHTML=days.map(d=>{
-    const dt=new Date(`${d}T12:00:00`);
-    const wd=new Intl.DateTimeFormat("fr-FR",{weekday:"short"}).format(dt);
-    const dm=new Intl.DateTimeFormat("fr-FR",{day:"2-digit",month:"2-digit"}).format(dt);
-    return `<button class="day-tab ${d===state.selectedDay?"active":""}" data-day="${d}"><b>${esc(wd)}</b><small>${esc(dm)}</small></button>`;
+    const dt=safeLocalDate(d);
+    const wd=dt ? new Intl.DateTimeFormat("fr-FR",{weekday:"short"}).format(dt) : "—";
+    const dm=dt ? new Intl.DateTimeFormat("fr-FR",{day:"2-digit",month:"2-digit"}).format(dt) : String(d||"");
+    return `<button class="day-tab ${d===state.selectedDay?"active":""}" data-day="${esc(d)}"><b>${esc(wd)}</b><small>${esc(dm)}</small></button>`;
   }).join("");
   $$("#dayTabs [data-day]").forEach(b=>b.addEventListener("click",()=>{state.selectedDay=b.dataset.day;renderAvailability()}));
 
@@ -453,7 +485,7 @@ async function saveSlot(slotId,value,replCode,replName){
       AgentCode:state.selectedAgent.Code,
       AgentNom:state.selectedAgent.Title,
       CreneauId:String(slot.CreneauId||slot.id),
-      DateGarde:slot.DateGarde||"",
+      DateGarde:dateOnly(slot.DateGarde||slot.Date),
       Date:dateOnly(slot.Date),
       HeureDebut:slot.HeureDebut||"",
       Valeur:normalizedValue,
@@ -477,7 +509,7 @@ async function applyWholeBlockAvailable(){
       AgentCode:state.selectedAgent.Code,
       AgentNom:state.selectedAgent.Title,
       CreneauId:String(slot.CreneauId||slot.id),
-      DateGarde:slot.DateGarde||"",
+      DateGarde:dateOnly(slot.DateGarde||slot.Date),
       Date:dateOnly(slot.Date),
       HeureDebut:slot.HeureDebut||"",
       Valeur:"1",RemplacantCode:"",RemplacantNom:""
@@ -493,10 +525,10 @@ async function applyWholeBlockAvailable(){
 }
 
 function assignmentDays(){
-  return [...new Set(state.assignments.map(a=>a.DateGarde||dateOnly(a.Date)).filter(Boolean))].sort();
+  return [...new Set(state.assignments.map(a=>dateOnly(a.DateGarde||a.Date)).filter(Boolean))].sort();
 }
 function assignmentBlocks(day){
-  const values=[...new Set(state.assignments.filter(a=>(a.DateGarde||dateOnly(a.Date))===day).map(a=>a.Bloc).filter(Boolean))];
+  const values=[...new Set(state.assignments.filter(a=>dateOnly(a.DateGarde||a.Date)===day).map(a=>a.Bloc).filter(Boolean))];
   return P.blockOrder.filter(b=>values.includes(b)).concat(values.filter(b=>!P.blockOrder.includes(b)));
 }
 function renderGuard(){
@@ -514,7 +546,7 @@ function renderGuard(){
   $("#guardBlockSelect").value=state.guardBlock;
 
   const rows=state.assignments.filter(a=>
-    (a.DateGarde||dateOnly(a.Date))===state.guardDay &&
+    dateOnly(a.DateGarde||a.Date)===state.guardDay &&
     a.Bloc===state.guardBlock &&
     (a.Publie===true || norm(a.Publie)==="TRUE" || C.mode==="demo")
   );
@@ -542,9 +574,10 @@ function renderGuard(){
   }).join("");
 
   const pub=[...state.publications].sort((a,b)=>String(b.PublishedAt||"").localeCompare(String(a.PublishedAt||"")))[0];
-  $("#guardPublicationText").textContent=pub?.PublishedAt
-    ? `Dernière publication : ${new Date(pub.PublishedAt).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}`
-    : "Dernière publication : données de démonstration";
+  const pubDate=parseExcelDateTime(pub?.PublishedAt);
+  $("#guardPublicationText").textContent=pubDate
+    ? `Dernière publication : ${pubDate.toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}`
+    : "Dernière publication : aucune date valide";
 }
 
 function renderChef(){
@@ -616,7 +649,7 @@ async function publishGuard(){
   if(!canManage()) return;
   if(!confirm(`Publier et geler la garde du ${fmtDateLong(state.chefDay)} · ${state.chefBlock} ?`)) return;
   const rows=state.assignments.filter(a=>
-    (a.DateGarde||dateOnly(a.Date))===state.chefDay &&
+    dateOnly(a.DateGarde||a.Date)===state.chefDay &&
     a.Bloc===state.chefBlock
   );
   busy(true,"Publication…");
@@ -734,8 +767,8 @@ async function renderDiagnostics(){
       tests.push(["Toutes les tables tblApp_* accessibles",tableValues.length>0 && tableValues.every(x=>x.ok)]);
 
       const syncRaw=state.health.sync?.timestamp||"";
-      const syncDate=syncRaw ? new Date(syncRaw) : null;
-      const ageMin=syncDate && !Number.isNaN(syncDate.valueOf())
+      const syncDate=parseExcelDateTime(syncRaw);
+      const ageMin=syncDate
         ? (Date.now()-syncDate.getTime())/60000
         : Infinity;
 

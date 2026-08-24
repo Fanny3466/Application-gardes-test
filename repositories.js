@@ -5,11 +5,39 @@ const P = window.GARDES_PROFILE;
 
 const norm = value => String(value ?? "").trim().toUpperCase();
 const dateOnly = value => {
-  if (!value) return "";
-  if (/^\d{4}-\d{2}-\d{2}/.test(String(value))) return String(value).slice(0,10);
-  const d = new Date(value);
-  if (Number.isNaN(d.valueOf())) return "";
-  const local = new Date(d.getTime() - d.getTimezoneOffset()*60000);
+  if (value === null || value === undefined || value === "") return "";
+
+  if (value instanceof Date) {
+    if (!Number.isFinite(value.valueOf())) return "";
+    const local = new Date(value.getTime() - value.getTimezoneOffset()*60000);
+    return local.toISOString().slice(0,10);
+  }
+
+  const raw=String(value).trim();
+  if(!raw) return "";
+
+  let m=raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m) return `${m[1]}-${m[2]}-${m[3]}`;
+
+  m=raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+  if(m){
+    const y=Number(m[3])<100 ? 2000+Number(m[3]) : Number(m[3]);
+    const mo=Number(m[2]), day=Number(m[1]);
+    if(y>=1900 && mo>=1 && mo<=12 && day>=1 && day<=31){
+      return `${String(y).padStart(4,"0")}-${String(mo).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+    }
+  }
+
+  // Microsoft Graph peut renvoyer une date Excel comme numéro de série.
+  const n=Number(raw.replace(",","."));
+  if(Number.isFinite(n) && n>=1 && n<1000000){
+    const d=new Date(Date.UTC(1899,11,30) + Math.floor(n)*86400000);
+    if(Number.isFinite(d.valueOf())) return d.toISOString().slice(0,10);
+  }
+
+  const d=new Date(raw);
+  if(!Number.isFinite(d.valueOf())) return "";
+  const local=new Date(d.getTime()-d.getTimezoneOffset()*60000);
   return local.toISOString().slice(0,10);
 };
 const isoLocal = d => {
@@ -818,9 +846,27 @@ class ExcelDirectRepository {
     }));
   }
 
-  async getSlots(){ return this.tableObjects("slots",true); }
-  async getAssignments(){ return this.tableObjects("assignments",true); }
-  async getPublications(){ return this.tableObjects("publications",true); }
+  async getSlots(){
+    const rows=await this.tableObjects("slots",true);
+    return rows.map(r=>({...r,
+      DateGarde:dateOnly(r.DateGarde||r.Date),
+      Date:dateOnly(r.Date||r.DateGarde)
+    }));
+  }
+  async getAssignments(){
+    const rows=await this.tableObjects("assignments",true);
+    return rows.map(r=>({...r,
+      DateGarde:dateOnly(r.DateGarde||r.Date),
+      Date:dateOnly(r.Date||r.DateGarde)
+    }));
+  }
+  async getPublications(){
+    const rows=await this.tableObjects("publications",true);
+    return rows.map(r=>({...r,
+      DateDebut:dateOnly(r.DateDebut),
+      DateFin:dateOnly(r.DateFin)
+    }));
+  }
   async getLocks(){ return this.tableObjects("locks",true); }
   async getJournal(){ return this.tableObjects("journal",true); }
 
@@ -863,11 +909,18 @@ class ExcelDirectRepository {
   }
 
   async getAllAvailability(){
-    const [mirror,pending]=await Promise.all([
+    const [mirrorRaw,pendingRaw]=await Promise.all([
       this.tableObjects("availability",true),
       this.getPendingSubmissions()
     ]);
-    return this.mergeAvailability(mirror,pending);
+    const normalizeDates=r=>({...r,
+      DateGarde:dateOnly(r.DateGarde||r.Date),
+      Date:dateOnly(r.Date||r.DateGarde)
+    });
+    return this.mergeAvailability(
+      mirrorRaw.map(normalizeDates),
+      pendingRaw.map(normalizeDates)
+    );
   }
 
   submissionRow(payload){
