@@ -248,3 +248,47 @@ dialog::backdrop{background:rgba(15,31,45,.45);backdrop-filter:blur(3px)}
 td.matrix-editable{cursor:pointer;transition:background .15s ease}
 td.matrix-editable:hover{background:#EEF7FF}
 td.matrix-editable:active{background:#DDEEFF}
+
+/* V2.4.1 — listes et regroupement Chef */
+.matrix-section-row td{
+  position:sticky;
+  left:0;
+  z-index:3;
+  padding:9px 10px !important;
+  background:#e6f3ff !important;
+  color:#164f7e;
+  border-top:2px solid #b8d9f2;
+  border-bottom:1px solid #c9ddea;
+  text-align:left !important;
+  font-weight:800;
+  white-space:nowrap;
+}
+.matrix-section-row td span{margin-right:8px}
+.matrix-section-row td b{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:22px;
+  height:22px;
+  padding:0 7px;
+  border-radius:999px;
+  background:#fff;
+  color:#0b5cab;
+  font-size:10px;
+}
+.matrix-section-muted td{
+  background:#f3f5f7 !important;
+  color:#697886;
+  border-top-color:#dce2e8;
+}
+.matrix-empty-row td{
+  padding:12px !important;
+  color:var(--muted);
+  font-style:italic;
+  text-align:left !important;
+  background:#fafcff;
+}
+.crew-assignment-select option{
+  color:#17212b;
+  background:#fff;
+}

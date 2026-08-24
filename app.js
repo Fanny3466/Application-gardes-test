@@ -193,7 +193,7 @@ async function init(){
   }
 
   if("serviceWorker" in navigator){
-    navigator.serviceWorker.register("./sw.js?v=2.4.0").catch(console.warn);
+    navigator.serviceWorker.register("./sw.js?v=2.4.1").catch(console.warn);
   }
 }
 
@@ -379,9 +379,61 @@ function renderAll(){
   if(canAdmin()) renderAdmin();
 }
 
+function sortedAgents(){
+  return [...state.agents].sort((a,b)=>
+    String(a.Title||"").localeCompare(
+      String(b.Title||""),
+      "fr",
+      {sensitivity:"base",numeric:true}
+    )
+  );
+}
+
+function resolveAgentFromAssignment(agentCode="",agentName=""){
+  const code=norm(agentCode);
+  const name=norm(agentName);
+
+  if(code){
+    const byCode=state.agents.find(a=>norm(a.Code)===code);
+    if(byCode) return byCode;
+  }
+
+  if(name){
+    const byName=state.agents.find(a=>norm(a.Title)===name);
+    if(byName) return byName;
+  }
+
+  return null;
+}
+
+function hasMeaningfulAvailability(v){
+  if(!v) return false;
+
+  const value=v.Valeur;
+  const valuePresent=
+    value !== null &&
+    value !== undefined &&
+    String(value).trim() !== "";
+
+  return valuePresent ||
+         String(v.RemplacantCode||"").trim() !== "" ||
+         String(v.RemplacantNom||"").trim() !== "";
+}
+
+function agentHasAvailabilityForDay(agentCode,day){
+  const daySlotIds=new Set(
+    slotsFor(day,"").map(s=>String(s.CreneauId||s.id))
+  );
+
+  return availabilityFor(agentCode).some(v=>
+    daySlotIds.has(String(v.CreneauId||"")) &&
+    hasMeaningfulAvailability(v)
+  );
+}
+
 function renderHome(){
   const select=$("#agentSelect");
-  select.innerHTML=state.agents.map(a=>`<option value="${esc(a.Code)}">${esc(a.Title)}</option>`).join("");
+  select.innerHTML=sortedAgents().map(a=>`<option value="${esc(a.Code)}">${esc(a.Title)}</option>`).join("");
   if(state.selectedAgent) select.value=state.selectedAgent.Code;
 
   const a=state.selectedAgent;
@@ -500,9 +552,11 @@ function openReplacementDialogForAgent(agentCode,slotId){
   const title=dlg.querySelector("h3");
   if(title) title.textContent=`Remplaçant de ${target.Title}`;
 
-  $("#replacementDialogList").innerHTML=state.agents.filter(a=>String(a.Code)!==String(agentCode)).map(a=>
-    `<button class="picker-btn" data-repl="${esc(a.Code)}"><b>${esc(a.Title)}</b><small>${esc(a.Fonctions||"")} · ${esc(a.Code)}</small></button>`
-  ).join("");
+  $("#replacementDialogList").innerHTML=sortedAgents()
+    .filter(a=>String(a.Code)!==String(agentCode))
+    .map(a=>
+      `<button class="picker-btn" data-repl="${esc(a.Code)}"><b>${esc(a.Title)}</b><small>${esc(a.Fonctions||"")} · ${esc(a.Code)}</small></button>`
+    ).join("");
 
   $$("#replacementDialogList [data-repl]").forEach(b=>b.addEventListener("click",async()=>{
     const a=state.agents.find(x=>String(x.Code)===String(b.dataset.repl));
@@ -608,11 +662,27 @@ function assignmentBlocks(day){
   return P.blockOrder.filter(b=>values.includes(b)).concat(values.filter(b=>!P.blockOrder.includes(b)));
 }
 function assignmentAgentOptions(currentCode="",currentName=""){
-  const options=[`<option value="">— Aucun —</option>`];
-  for(const a of state.agents){
-    const selected=String(a.Code)===String(currentCode) ? " selected" : "";
-    options.push(`<option value="${esc(a.Code)}"${selected}>${esc(a.Title)}</option>`);
+  const current=resolveAgentFromAssignment(currentCode,currentName);
+  const selectedCode=current?.Code||"";
+  const options=[
+    `<option value="" ${!selectedCode&&!currentName?"selected":""}>— Aucun —</option>`
+  ];
+
+  // Si Excel contient encore un nom non présent dans la liste des agents actifs,
+  // on le conserve visuellement au lieu d'afficher une case vide.
+  if(currentName && !current){
+    options.push(
+      `<option value="" selected disabled>${esc(currentName)} · non référencé</option>`
+    );
   }
+
+  for(const a of sortedAgents()){
+    const selected=String(a.Code)===String(selectedCode) ? " selected" : "";
+    options.push(
+      `<option value="${esc(a.Code)}"${selected}>${esc(a.Title)}</option>`
+    );
+  }
+
   return options.join("");
 }
 
@@ -691,9 +761,10 @@ function renderGuard(){
     const crew=v.roles.map(role=>{
       const a=byKey[`${norm(v.key)}|${norm(role)}`] || byKey[`${norm(v.vehicle)}|${norm(role)}`];
       const name=a?.AgentNom||"";
+      const resolvedAgent=resolveAgentFromAssignment(a?.AgentCode||"",name);
       const assignmentControl=canEditOperationalData()
         ? `<select class="crew-assignment-select" data-piquet="${esc(v.key)}" data-role="${esc(role)}">
-             ${assignmentAgentOptions(a?.AgentCode||"",name)}
+             ${assignmentAgentOptions(resolvedAgent?.Code||a?.AgentCode||"",name)}
            </select>`
         : `<span class="crew-name ${name?"":"crew-empty"}">${name?esc(name):"— À compléter —"}</span>`;
 
@@ -714,8 +785,12 @@ function renderGuard(){
       const piquet=select.dataset.piquet;
       const role=select.dataset.role;
       const row=byKey[`${norm(piquet)}|${norm(role)}`];
-      const selectedCode=row?.AgentCode||"";
-      select.value=selectedCode;
+      const current=resolveAgentFromAssignment(row?.AgentCode||"",row?.AgentNom||"");
+      const selectedCode=current?.Code||row?.AgentCode||"";
+
+      if(selectedCode){
+        select.value=selectedCode;
+      }
 
       select.addEventListener("change",()=>saveAssignmentFromGuard(
         piquet,role,select.value
@@ -757,8 +832,15 @@ function renderChef(){
 
   $("#potentialStrip").innerHTML=slots.map((s,i)=>`<div class="potential"><small>${esc(hourLabel(s))}</small><b>${potentials[i]}</b></div>`).join("");
 
-  $("#chefMatrix").innerHTML=`<thead><tr><th>Agent</th>${slots.map(s=>`<th>${esc(hourLabel(s))}</th>`).join("")}</tr></thead><tbody>`+
-    state.agents.map(a=>`<tr>
+  const agentsSorted=sortedAgents();
+  const agentsWithData=agentsSorted.filter(a=>
+    agentHasAvailabilityForDay(a.Code,state.chefDay)
+  );
+  const agentsWithoutData=agentsSorted.filter(a=>
+    !agentHasAvailabilityForDay(a.Code,state.chefDay)
+  );
+
+  const renderAgentRow=a=>`<tr data-agent-row="${esc(a.Code)}">
       <td><b>${esc(a.Title)}</b><small>${esc(a.Fonctions||"")}</small></td>
       ${slots.map(s=>{
         const id=String(s.CreneauId||s.id);
@@ -767,7 +849,33 @@ function renderChef(){
         const editable=canEditOperationalData() ? " matrix-editable" : "";
         return `<td class="${editable.trim()}" data-agent="${esc(a.Code)}" data-slot="${esc(id)}"><i class="matrix-mark ${meta.className}" title="${esc(meta.label)}">${meta.icon}</i></td>`;
       }).join("")}
-    </tr>`).join("")+"</tbody>";
+    </tr>`;
+
+  const colSpan=Math.max(1,slots.length+1);
+
+  $("#chefMatrix").innerHTML=
+    `<thead><tr><th>Agent</th>${slots.map(s=>`<th>${esc(hourLabel(s))}</th>`).join("")}</tr></thead>`+
+    `<tbody class="matrix-group matrix-group-filled">
+      <tr class="matrix-section-row">
+        <td colspan="${colSpan}">
+          <span>Disponibilités renseignées</span>
+          <b>${agentsWithData.length}</b>
+        </td>
+      </tr>
+      ${agentsWithData.length
+        ? agentsWithData.map(renderAgentRow).join("")
+        : `<tr class="matrix-empty-row"><td colspan="${colSpan}">Aucun agent n’a encore renseigné de disponibilité pour cette journée.</td></tr>`
+      }
+    </tbody>`+
+    `<tbody class="matrix-group matrix-group-empty">
+      <tr class="matrix-section-row matrix-section-muted">
+        <td colspan="${colSpan}">
+          <span>Sans disponibilité renseignée</span>
+          <b>${agentsWithoutData.length}</b>
+        </td>
+      </tr>
+      ${agentsWithoutData.map(renderAgentRow).join("")}
+    </tbody>`;
 
   if(canEditOperationalData()){
     $$("#chefMatrix td.matrix-editable").forEach(cell=>{
