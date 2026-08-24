@@ -685,50 +685,127 @@ class ExcelDirectRepository {
     return (range?.values?.[0]||[]).map(v=>String(v??"").trim());
   }
 
+  excelColumnName(oneBasedColumn){
+    let n=Number(oneBasedColumn);
+    let s="";
+    while(n>0){
+      const r=(n-1)%26;
+      s=String.fromCharCode(65+r)+s;
+      n=Math.floor((n-1)/26);
+    }
+    return s;
+  }
+
+  worksheetNameFromRangeAddress(address){
+    const text=String(address||"");
+    const bang=text.lastIndexOf("!");
+    if(bang<0) throw new Error("Nom de feuille introuvable dans l'adresse Excel : "+text);
+
+    let sheet=text.slice(0,bang).trim();
+    if(sheet.startsWith("'") && sheet.endsWith("'")){
+      sheet=sheet.slice(1,-1).replace(/''/g,"'");
+    }
+    return sheet;
+  }
+
+  async tableRaw(key){
+    const tableName=G.excelDirect.tables[key];
+    if(!tableName) throw new Error(`Table Excel non configurée : ${key}`);
+    return this.workbook(`/tables/${encodeURIComponent(tableName)}/range`);
+  }
+
+  async patchWorksheetRange(sheetName,address,values){
+    const path=
+      `/worksheets/${encodeURIComponent(sheetName)}/range(address='${address}')`;
+
+    return this.workbook(path,{
+      method:"PATCH",
+      body:{values}
+    });
+  }
+
   async appendRows(key,rowObjs){
     if(!rowObjs?.length) return;
-    const tableName=G.excelDirect.tables[key];
-    const headers=await this.tableHeaders(key);
-    const values=rowObjs.map(row=>headers.map(h=>row[h]===undefined ? "" : row[h]));
 
-    await this.workbook(`/tables/${encodeURIComponent(tableName)}/rows/add`,{
-      method:"POST",
-      body:{index:null,values}
-    });
+    const raw=await this.tableRaw(key);
+    const values=Array.isArray(raw?.values)
+      ? raw.values.map(r=>Array.isArray(r)?[...r]:[])
+      : [];
+
+    if(!values.length) throw new Error(`Table Excel vide/inaccessible : ${key}`);
+
+    const headers=(values[0]||[]).map(v=>String(v??"").trim());
+    const blanks=[];
+
+    for(let i=1;i<values.length;i++){
+      const row=values[i]||[];
+      if(row.every(v=>v===null || v===undefined || String(v).trim()==="")){
+        blanks.push(i);
+      }
+    }
+
+    if(blanks.length < rowObjs.length){
+      throw new Error(
+        `Capacité insuffisante dans ${G.excelDirect.tables[key]} : `+
+        `${blanks.length} ligne(s) vide(s), ${rowObjs.length} requise(s). `+
+        `Relance Initialiser_Solution_A_Excel_Direct avec le module V1.3.`
+      );
+    }
+
+    const chosen=blanks.slice(0,rowObjs.length);
+    const sheetName=this.worksheetNameFromRangeAddress(raw.address);
+    const firstCol=Number(raw.columnIndex)+1;
+    const lastCol=firstCol+Number(raw.columnCount)-1;
+
+    // Groupe les emplacements contigus pour réduire le nombre d'appels Graph.
+    let pos=0;
+    while(pos<chosen.length){
+      let endPos=pos;
+      while(endPos+1<chosen.length && chosen[endPos+1]===chosen[endPos]+1){
+        endPos++;
+      }
+
+      const segment=chosen.slice(pos,endPos+1);
+      const segmentRows=rowObjs.slice(pos,endPos+1).map(obj=>
+        headers.map(h=>obj[h]===undefined ? "" : obj[h])
+      );
+
+      const excelStartRow=Number(raw.rowIndex)+segment[0]+1;
+      const excelEndRow=Number(raw.rowIndex)+segment[segment.length-1]+1;
+      const address=
+        `${this.excelColumnName(firstCol)}${excelStartRow}:`+
+        `${this.excelColumnName(lastCol)}${excelEndRow}`;
+
+      await this.patchWorksheetRange(sheetName,address,segmentRows);
+      pos=endPos+1;
+    }
 
     this.tableCache.delete(key);
   }
 
-  async patchTableFieldsByColumns(key,index,fields){
-    const tableName=G.excelDirect.tables[key];
-    if(!tableName) throw new Error(`Table Excel non configurée : ${key}`);
+  async patchTableFieldsViaWorksheet(key,index,fields){
+    const raw=await this.tableRaw(key);
+    const headers=(raw?.values?.[0]||[]).map(v=>String(v??"").trim());
+    const sheetName=this.worksheetNameFromRangeAddress(raw.address);
 
     for(const [columnName,value] of Object.entries(fields||{})){
-      const colPath=`/tables/${encodeURIComponent(tableName)}/columns/${encodeURIComponent(columnName)}/range`;
-      const range=await this.workbook(colPath);
-      const values=Array.isArray(range?.values)
-        ? range.values.map(r=>Array.isArray(r)?[...r]:[r])
-        : [];
-
-      const target=index+1;
-      if(target<1 || target>=values.length){
-        throw new Error(`Index de ligne invalide : ${tableName}.${columnName} / ${index}`);
+      const colIndex=headers.findIndex(h=>norm(h)===norm(columnName));
+      if(colIndex<0){
+        throw new Error(`Colonne ${columnName} introuvable dans ${G.excelDirect.tables[key]}.`);
       }
 
-      while(values[target].length<1) values[target].push("");
-      values[target][0]=value===undefined ? "" : value;
+      const excelRow=Number(raw.rowIndex)+Number(index)+2;
+      const excelCol=Number(raw.columnIndex)+colIndex+1;
+      const address=`${this.excelColumnName(excelCol)}${excelRow}`;
 
-      await this.workbook(colPath,{
-        method:"PATCH",
-        body:{values}
-      });
+      await this.patchWorksheetRange(sheetName,address,[[value===undefined ? "" : value]]);
     }
 
     this.tableCache.delete(key);
   }
 
   async patchRow(key,index,rowObj){
-    await this.patchTableFieldsByColumns(key,index,rowObj);
+    await this.patchTableFieldsViaWorksheet(key,index,rowObj);
   }
 
   async getAgents(){
@@ -846,7 +923,7 @@ class ExcelDirectRepository {
     };
 
     if(existing){
-      await this.patchTableFieldsByColumns("locks",existing.__index,{
+      await this.patchTableFieldsViaWorksheet("locks",existing.__index,{
         Scope:row.Scope,
         Date:row.Date,
         Bloc:row.Bloc,
@@ -910,7 +987,7 @@ class ExcelDirectRepository {
     if(Object.prototype.hasOwnProperty.call(payload,"Role")) fields.Role=row.Role;
     if(Object.prototype.hasOwnProperty.call(payload,"Actif")) fields.Actif=row.Actif;
 
-    await this.patchTableFieldsByColumns("agents",existing.__index,fields);
+    await this.patchTableFieldsViaWorksheet("agents",existing.__index,fields);
     this.tableCache.delete("agents");
     return row;
   }
