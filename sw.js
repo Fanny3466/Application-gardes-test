@@ -1,8 +1,8 @@
-const CACHE="gardes-production-2.3.4";
+const CACHE="gardes-production-2.3.5";
 const CORE=[
-  "./","./index.html","./styles.css?v=2.3.4","./app.js?v=2.3.4",
-  "./repositories.js?v=2.3.4","./config.js?v=2.3.4","./profile.js?v=2.3.4",
-  "./production-config.js?v=2.3.4","./manifest.webmanifest",
+  "./","./index.html","./styles.css?v=2.3.5","./app.js?v=2.3.5",
+  "./repositories.js?v=2.3.5","./config.js?v=2.3.5","./profile.js?v=2.3.5",
+  "./production-config.js?v=2.3.5","./manifest.webmanifest",
   "./assets/icon-192.png","./assets/icon-512.png","./assets/apple-touch-icon.png"
 ];
 

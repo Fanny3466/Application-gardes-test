@@ -91,9 +91,15 @@ function parseExcelDateTime(value){
   }
   return null;
 }
+function displayTime(value,{stripMinutes=false}={}){
+  const hhmm=(R.timeOnly ? R.timeOnly(value) : String(value||"").slice(0,5));
+  if(!hhmm) return "";
+  const [h="",m="00"]=hhmm.split(":");
+  if(stripMinutes && m==="00") return `${Number(h)}h`;
+  return `${String(h).padStart(2,"0")}h${String(m).padStart(2,"0")}`;
+}
 function hourLabel(slot){
-  const h=String(slot.HeureDebut||"").slice(0,5);
-  return h.replace(":00","h");
+  return displayTime(slot.HeureDebut,{stripMinutes:true});
 }
 function statusMeta(value,replCode=""){
   if(replCode) return {label:"Remplaçant",icon:"🔁",className:"replacement"};
@@ -183,7 +189,7 @@ async function init(){
   }
 
   if("serviceWorker" in navigator){
-    navigator.serviceWorker.register("./sw.js?v=2.3.4").catch(console.warn);
+    navigator.serviceWorker.register("./sw.js?v=2.3.5").catch(console.warn);
   }
 }
 
@@ -427,7 +433,7 @@ function renderAvailability(){
     const meta=statusMeta(v.Valeur,v.RemplacantCode);
     const repl=v.RemplacantNom || (v.RemplacantCode ? state.agents.find(a=>norm(a.Code)===norm(v.RemplacantCode))?.Title : "");
     return `<button class="slot-card ${meta.className}" data-slot="${esc(id)}">
-      <div class="slot-time"><b>${esc(hourLabel(s))}</b><small>${esc(String(s.HeureFin||"").slice(0,5).replace(":59","h59"))}</small></div>
+      <div class="slot-time"><b>${esc(hourLabel(s))}</b><small>${esc(displayTime(s.HeureFin))}</small></div>
       <div class="slot-status"><span class="status-icon">${meta.icon}</span><span class="slot-status-text"><b>${esc(meta.label)}</b><small>${repl?`Remplacé par ${esc(repl)}`:"Touchez pour modifier"}</small></span></div>
       <span class="slot-chevron">›</span>
     </button>`;
@@ -487,7 +493,7 @@ async function saveSlot(slotId,value,replCode,replName){
       CreneauId:String(slot.CreneauId||slot.id),
       DateGarde:dateOnly(slot.DateGarde||slot.Date),
       Date:dateOnly(slot.Date),
-      HeureDebut:slot.HeureDebut||"",
+      HeureDebut:R.timeOnly ? R.timeOnly(slot.HeureDebut) : (slot.HeureDebut||""),
       Valeur:normalizedValue,
       RemplacantCode:replCode||"",
       RemplacantNom:replName||""
@@ -511,7 +517,7 @@ async function applyWholeBlockAvailable(){
       CreneauId:String(slot.CreneauId||slot.id),
       DateGarde:dateOnly(slot.DateGarde||slot.Date),
       Date:dateOnly(slot.Date),
-      HeureDebut:slot.HeureDebut||"",
+      HeureDebut:R.timeOnly ? R.timeOnly(slot.HeureDebut) : (slot.HeureDebut||""),
       Valeur:"1",RemplacantCode:"",RemplacantNom:""
     }));
 

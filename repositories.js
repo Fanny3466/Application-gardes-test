@@ -44,6 +44,46 @@ const isoLocal = d => {
   const x = new Date(d.getTime() - d.getTimezoneOffset()*60000);
   return x.toISOString().slice(0,19);
 };
+const timeOnly = value => {
+  if(value===null || value===undefined || value==="") return "";
+  if(value instanceof Date && Number.isFinite(value.valueOf())){
+    return `${String(value.getHours()).padStart(2,"0")}:${String(value.getMinutes()).padStart(2,"0")}`;
+  }
+
+  const raw=String(value).trim();
+  if(!raw) return "";
+
+  let m=raw.match(/^(\d{1,2})[:hH](\d{2})/);
+  if(m){
+    const h=Number(m[1]), min=Number(m[2]);
+    if(h>=0 && h<=23 && min>=0 && min<=59){
+      return `${String(h).padStart(2,"0")}:${String(min).padStart(2,"0")}`;
+    }
+  }
+
+  m=raw.match(/^(\d{1,2})[hH]?$/);
+  if(m){
+    const h=Number(m[1]);
+    if(h>=0 && h<=23) return `${String(h).padStart(2,"0")}:00`;
+  }
+
+  // Excel/Graph renvoie les heures comme fractions de journée.
+  const n=Number(raw.replace(",","."));
+  if(Number.isFinite(n)){
+    let totalMinutes;
+    if(Number.isInteger(n) && n>=0 && n<=23){
+      totalMinutes=n*60;
+    }else{
+      const fraction=((n%1)+1)%1;
+      totalMinutes=Math.round(fraction*1440)%1440;
+    }
+    const h=Math.floor(totalMinutes/60)%24;
+    const min=totalMinutes%60;
+    return `${String(h).padStart(2,"0")}:${String(min).padStart(2,"0")}`;
+  }
+
+  return raw.slice(0,5);
+};
 
 function demoSlots() {
   const base = new Date();
@@ -420,7 +460,7 @@ class GraphRepository {
       CreneauId:String(payload.CreneauId),
       DateGarde:payload.DateGarde||"",
       Date:payload.Date||"",
-      HeureDebut:payload.HeureDebut||"",
+      HeureDebut:timeOnly(payload.HeureDebut),
       Valeur:payload.Valeur||"",
       RemplacantCode:payload.RemplacantCode||"",
       RemplacantNom:payload.RemplacantNom||"",
@@ -850,7 +890,9 @@ class ExcelDirectRepository {
     const rows=await this.tableObjects("slots",true);
     return rows.map(r=>({...r,
       DateGarde:dateOnly(r.DateGarde||r.Date),
-      Date:dateOnly(r.Date||r.DateGarde)
+      Date:dateOnly(r.Date||r.DateGarde),
+      HeureDebut:timeOnly(r.HeureDebut),
+      HeureFin:timeOnly(r.HeureFin)
     }));
   }
   async getAssignments(){
@@ -933,7 +975,7 @@ class ExcelDirectRepository {
       CreneauId:String(payload.CreneauId),
       DateGarde:payload.DateGarde||"",
       Date:payload.Date||"",
-      HeureDebut:payload.HeureDebut||"",
+      HeureDebut:timeOnly(payload.HeureDebut),
       Valeur:payload.Valeur||"",
       RemplacantCode:payload.RemplacantCode||"",
       RemplacantNom:payload.RemplacantNom||"",
@@ -1087,5 +1129,5 @@ class ExcelDirectRepository {
   }
 }
 
-window.GardesRepositories={DemoRepository,GraphRepository,ExcelDirectRepository,dateOnly,isoLocal,norm};
+window.GardesRepositories={DemoRepository,GraphRepository,ExcelDirectRepository,dateOnly,isoLocal,timeOnly,norm};
 })();
