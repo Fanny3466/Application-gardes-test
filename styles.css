@@ -249,7 +249,7 @@ td.matrix-editable{cursor:pointer;transition:background .15s ease}
 td.matrix-editable:hover{background:#EEF7FF}
 td.matrix-editable:active{background:#DDEEFF}
 
-/* V2.4.1 — listes et regroupement Chef */
+/* V2.5.0 — listes et regroupement Chef */
 .matrix-section-row td{
   position:sticky;
   left:0;

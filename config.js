@@ -3,7 +3,7 @@
 const PROD = window.GARDES_PRODUCTION || {};
 
 window.GARDES_CONFIG = {
-  version: "2.4.1",
+  version: "2.5.0",
   appName: "Application Gardes",
   environment: "PRODUCTION",
   mode: "excel-direct",
@@ -39,11 +39,18 @@ window.GARDES_CONFIG = {
       locks: "tblApp_Verrous",
       publications: "tblApp_Publications",
       commands: "tblApp_Commandes",
-      journal: "tblApp_Journal"
+      journal: "tblApp_Journal",
+      cloudStatus: "tblApp_CloudStatus"
     },
 
     maxExcelSyncAgeMinutes: Number(PROD.maxExcelSyncAgeMinutes || 5),
     maxRetries: 4
+  },
+
+  cloud24x7: {
+    enabled: true,
+    statusTable: "tblApp_CloudStatus",
+    staleAfterMinutes: 5
   },
 
   roles: {

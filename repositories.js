@@ -1128,6 +1128,23 @@ class ExcelDirectRepository {
     return row;
   }
 
+  async getCloudStatus(){
+    try{
+      const rows=await this.tableObjects("cloudStatus",true);
+      const result={};
+      for(const row of rows){
+        const key=String(row.Key||"").trim();
+        if(key) result[key]={
+          value:String(row.Value??""),
+          updatedAt:String(row.UpdatedAt??"")
+        };
+      }
+      return result;
+    }catch(err){
+      return {};
+    }
+  }
+
   async getLastSyncInfo(){
     const assignments=await this.tableObjects("assignments",true);
     const timestamps=assignments
@@ -1143,17 +1160,23 @@ class ExcelDirectRepository {
       this.getSyncErrors()
     ]);
 
+    const cloud=await this.getCloudStatus();
+    const cloudLast=cloud.LAST_RUN?.updatedAt || cloud.LAST_RUN?.value || "";
     return {
-      timestamp:last,
+      timestamp:cloudLast || last,
       pending:pendingSubmissions.length + pendingCommands.length + pendingLocks.length,
-      errors:errors.length
+      errors:errors.length,
+      cloudStatus:cloud.STATUS?.value || "",
+      cloudResult:cloud.LAST_RESULT?.value || "",
+      cloudRecalcRequired:cloud.RECALC_REQUIRED?.value || "",
+      cloudLastRun:cloudLast
     };
   }
 
   async healthCheck(){
     const required=[
       "agents","slots","availability","submissions","assignments",
-      "locks","publications","commands","journal"
+      "locks","publications","commands","journal","cloudStatus"
     ];
     const tables={};
 
