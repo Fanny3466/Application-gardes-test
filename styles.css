@@ -292,3 +292,12 @@ td.matrix-editable:active{background:#DDEEFF}
   color:#17212b;
   background:#fff;
 }
+
+/* V2.5.1 - mentions de licence */
+.license-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.license-grid>div{padding:9px;border:1px solid var(--line);border-radius:10px;background:#f7f9fb}
+.license-grid small{display:block;color:var(--muted);font-size:9px;margin-bottom:3px}
+.license-grid b{font-size:10px}
+.legal-copy{font-weight:800;color:#27465e;margin:10px 0 4px;font-size:10px}
+.legal-small{color:var(--muted);font-size:9px;line-height:1.45}
+.legal-footer{text-align:center;color:#788896;font-size:8px;padding:8px 12px 78px}

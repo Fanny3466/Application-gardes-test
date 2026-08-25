@@ -1,0 +1,45 @@
+APPLICATION GARDES - NOTICE DE LICENCE PROPRIETAIRE
+Version de notice : 1.0 - France
+
+© 2026 Application Gardes - Tous droits réservés.
+
+IMPORTANT
+La présente notice ne remplace pas le contrat de licence signé avec le client.
+Le titulaire juridique des droits et la structure éditrice doivent être renseignés
+et vérifiés avant toute commercialisation.
+
+1. ABSENCE DE LICENCE OPEN SOURCE
+La mise à disposition des fichiers HTML, CSS, JavaScript, VBA ou Office Scripts
+au navigateur, au client ou à un prestataire n'accorde aucune licence open source.
+
+2. DROIT D'UTILISATION
+L'utilisation est autorisée uniquement dans le périmètre prévu par une licence
+écrite valide : client, centre(s), nombre d'utilisateurs, durée et modules autorisés.
+
+3. DROITS RESERVES
+Sauf autorisation écrite ou disposition légale impérative, sont interdits :
+- redistribution ou mise à disposition à un tiers ;
+- revente ou sous-licence ;
+- copie autre que les sauvegardes nécessaires autorisées ;
+- adaptation ou création d'une offre dérivée destinée à des tiers ;
+- suppression ou altération des mentions de propriété ;
+- utilisation au-delà du périmètre de licence.
+
+4. EXCEPTIONS LEGALES
+La présente notice ne limite pas les droits que la loi rend impératifs,
+notamment ceux prévus pour l'utilisateur légitime d'un logiciel.
+
+5. DONNEES ET SERVICES TIERS
+Microsoft 365, SharePoint, OneDrive, Entra, Power Automate, Office Scripts,
+GitHub Pages et autres services tiers restent soumis à leurs propres licences
+et conditions. Leur abonnement n'est pas transféré avec Application Gardes.
+
+6. FIN DE LICENCE
+À l'expiration ou à la résiliation, l'utilisation doit cesser selon le contrat.
+Les données du client doivent rester exportables et restituables selon les
+obligations contractuelles et réglementaires.
+
+7. DROIT APPLICABLE
+Le contrat commercial doit préciser le droit applicable, la juridiction compétente,
+le support, la maintenance, la disponibilité du service, les sauvegardes,
+la réversibilité, la confidentialité, le RGPD et la responsabilité.

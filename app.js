@@ -1,3 +1,10 @@
+/*
+ * APPLICATION GARDES - LOGICIEL PROPRIÉTAIRE
+ * © 2026 - Tous droits réservés.
+ * Utilisation soumise à licence. Aucune licence open source n'est accordée
+ * par la mise à disposition technique de ces fichiers au navigateur.
+ * Les exceptions impératives prévues par la loi restent applicables.
+ */
 (function(){
 "use strict";
 const C = window.GARDES_CONFIG;
@@ -452,9 +459,33 @@ function renderHome(){
 function availableDays(){
   return [...new Set(state.slots.map(s=>dateOnly(s.DateGarde||s.Date)).filter(Boolean))].sort();
 }
+function canonicalBlock(value){
+  return norm(value).replace(/\s+/g,"");
+}
+
+function slotBlocks(day){
+  const values=[...new Set(
+    state.slots
+      .filter(s=>dateOnly(s.DateGarde||s.Date)===day)
+      .map(s=>String(s.Bloc||"").trim())
+      .filter(Boolean)
+  )];
+
+  const order=new Map(P.blockOrder.map((b,i)=>[canonicalBlock(b),i]));
+  return values.sort((a,b)=>{
+    const ia=order.has(canonicalBlock(a)) ? order.get(canonicalBlock(a)) : 999;
+    const ib=order.has(canonicalBlock(b)) ? order.get(canonicalBlock(b)) : 999;
+    return ia-ib || a.localeCompare(b,"fr",{sensitivity:"base"});
+  });
+}
+
 function slotsFor(day,block){
+  const target=canonicalBlock(block);
   return state.slots
-    .filter(s=>dateOnly(s.DateGarde||s.Date)===day && (!block || s.Bloc===block))
+    .filter(s=>
+      dateOnly(s.DateGarde||s.Date)===day &&
+      (!target || canonicalBlock(s.Bloc)===target)
+    )
     .sort((a,b)=>(Number(a.Ordre)||0)-(Number(b.Ordre)||0));
 }
 function availabilityFor(agentCode){
@@ -810,7 +841,7 @@ function renderChef(){
   const days=availableDays();
   if(!days.length) return;
   if(!state.chefDay || !days.includes(state.chefDay)) state.chefDay=days[0];
-  const blocks=P.blockOrder.filter(b=>slotsFor(state.chefDay,b).length);
+  const blocks=slotBlocks(state.chefDay);
   if(!state.chefBlock || !blocks.includes(state.chefBlock)) state.chefBlock=blocks[0]||"";
 
   $("#chefDateSelect").innerHTML=days.map(d=>`<option value="${d}">${esc(fmtDateLong(d))}</option>`).join("");
@@ -901,6 +932,10 @@ function currentLock(day,block){
 
 async function toggleLock(){
   if(!canManage()) return;
+  if(!state.chefBlock){
+    toast("Choisir une tranche horaire avant de verrouiller.","error");
+    return;
+  }
   const locked=!!currentLock(state.chefDay,state.chefBlock);
   busy(true,locked?"Déverrouillage…":"Verrouillage…");
   try{
@@ -914,6 +949,10 @@ async function toggleLock(){
 
 async function publishGuard(){
   if(!canManage()) return;
+  if(!state.chefBlock){
+    toast("Choisir une tranche horaire avant de publier.","error");
+    return;
+  }
   if(!confirm(`Publier et geler la garde du ${fmtDateLong(state.chefDay)} · ${state.chefBlock} ?`)) return;
   const rows=state.assignments.filter(a=>
     dateOnly(a.DateGarde||a.Date)===state.chefDay &&
@@ -947,6 +986,22 @@ function renderAdmin(){
   ].map(([a,b])=>`<div class="stat-card"><small>${esc(a)}</small><b>${esc(b)}</b></div>`).join("");
   renderDiagnostics();
   renderRoleManager();
+  renderLicenseInfo();
+}
+
+function renderLicenseInfo(){
+  const host=$("#licenseInfo");
+  if(!host) return;
+  const L=C.commercial||{};
+  host.innerHTML=`
+    <div class="license-grid">
+      <div><small>Produit</small><b>${esc(L.productName||"Application Gardes")}</b></div>
+      <div><small>Modèle</small><b>${esc(L.licenseModel||"Licence propriétaire")}</b></div>
+      <div><small>Client</small><b>${esc(L.customer||"À paramétrer")}</b></div>
+      <div><small>Licence</small><b>${esc(L.licenseId||"À paramétrer")}</b></div>
+    </div>
+    <p class="legal-copy">${esc(L.notice||"© 2026 Application Gardes - Tous droits réservés. Utilisation soumise à licence.")}</p>
+    <p class="legal-small">La mise à disposition de l’application dans un navigateur n’emporte aucune cession de droits de propriété intellectuelle. Les conditions contractuelles du client et les exceptions légales impératives demeurent applicables.</p>`;
 }
 
 function roleChoices(current="AGENT"){

@@ -3,7 +3,7 @@
 const PROD = window.GARDES_PRODUCTION || {};
 
 window.GARDES_CONFIG = {
-  version: "2.5.0",
+  version: "2.5.1",
   appName: "Application Gardes",
   environment: "PRODUCTION",
   mode: "excel-direct",
@@ -45,6 +45,15 @@ window.GARDES_CONFIG = {
 
     maxExcelSyncAgeMinutes: Number(PROD.maxExcelSyncAgeMinutes || 5),
     maxRetries: 4
+  },
+
+  commercial: {
+    productName: "Application Gardes",
+    licenseModel: "Licence propriétaire non exclusive et non transférable",
+    customer: "INSTANCE PILOTE",
+    licenseId: "A-PARAMETRER",
+    owner: "Titulaire des droits à vérifier / compléter avant commercialisation",
+    notice: "© 2026 Application Gardes - Tous droits réservés. Utilisation soumise à licence."
   },
 
   cloud24x7: {
