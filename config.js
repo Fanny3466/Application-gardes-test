@@ -3,7 +3,7 @@
 const PROD = window.GARDES_PRODUCTION || {};
 
 window.GARDES_CONFIG = {
-  version: "2.5.1",
+  version: "2.5.2",
   appName: "Application Gardes",
   environment: "PRODUCTION",
   mode: "excel-direct",

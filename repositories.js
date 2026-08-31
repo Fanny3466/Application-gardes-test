@@ -1011,19 +1011,63 @@ class ExcelDirectRepository {
     };
   }
 
+  async getDesktopEditLock(){
+    const cloud=await this.getCloudStatus();
+    const active=norm(cloud.DESKTOP_ACTIVE?.value||"")==="OUI";
+    if(!active) return {locked:false};
+
+    const raw=cloud.DESKTOP_HEARTBEAT?.value ||
+              cloud.DESKTOP_HEARTBEAT?.updatedAt ||
+              cloud.DESKTOP_ACTIVE?.updatedAt || "";
+
+    let d=null;
+    if(raw!=="" && raw!==null && raw!==undefined){
+      const s=String(raw).trim();
+      const n=Number(s.replace(",","."));
+      if(Number.isFinite(n) && n>=1 && n<1000000){
+        d=new Date(Date.UTC(1899,11,30)+n*86400000);
+      }else{
+        const parsed=new Date(s);
+        if(Number.isFinite(parsed.valueOf())) d=parsed;
+      }
+    }
+
+    if(!d) return {locked:false};
+    const ageMs=Date.now()-d.valueOf();
+    return {
+      locked:ageMs>=0 && ageMs < 12*60*1000,
+      ageMs,
+      user:cloud.DESKTOP_USER?.value||""
+    };
+  }
+
+  async assertDesktopWritable(){
+    const lock=await this.getDesktopEditLock();
+    if(lock.locked){
+      throw new Error(
+        "Le classeur Excel est actuellement ouvert en mode Bureau. "+
+        "Pour éviter un conflit de fusion SharePoint, les modifications sont "+
+        "temporairement en lecture seule. Réessaie après la fermeture d’Excel."
+      );
+    }
+  }
+
   async saveAvailability(payload){
+    await this.assertDesktopWritable();
     const row=this.submissionRow(payload);
     await this.appendRows("submissions",[row]);
     return row;
   }
 
   async saveAvailabilityBatch(payloads){
+    await this.assertDesktopWritable();
     const rows=payloads.map(p=>this.submissionRow(p));
     await this.appendRows("submissions",rows);
     return rows;
   }
 
   async setLock(scope,date,bloc,locked,userEmail){
+    await this.assertDesktopWritable();
     const rows=await this.tableObjects("locks",true);
     const id=`${scope}|${date}|${bloc}`;
     const existing=rows.find(x=>String(x.ID||"")===id);
@@ -1056,6 +1100,7 @@ class ExcelDirectRepository {
   }
 
   async addCommand(command,date="",bloc="",userEmail="",message=""){
+    await this.assertDesktopWritable();
     const row={
       ID:`CMD-${Date.now()}-${Math.random().toString(16).slice(2,8)}`,
       Commande:command,
@@ -1090,6 +1135,7 @@ class ExcelDirectRepository {
   }
 
   async publish(type,data,userEmail){
+    await this.assertDesktopWritable();
     const row={
       ID:`PUB-${Date.now()}-${Math.random().toString(16).slice(2,7)}`,
       Type:type,
@@ -1109,6 +1155,7 @@ class ExcelDirectRepository {
   }
 
   async saveAgentAccess(agentCode,payload){
+    await this.assertDesktopWritable();
     const rows=await this.tableObjects("agents",true);
     const existing=rows.find(x=>norm(x.Code)===norm(agentCode));
     if(!existing) throw new Error("Agent introuvable dans tblApp_Agents.");
