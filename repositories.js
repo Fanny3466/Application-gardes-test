@@ -85,6 +85,41 @@ const timeOnly = value => {
   return raw.slice(0,5);
 };
 
+
+const timestampMs = value => {
+  if(value===null || value===undefined || value==="") return 0;
+
+  if(typeof value==="number" && Number.isFinite(value)){
+    // Excel sérialise les dates comme une heure murale locale.
+    // Les composantes UTC servent ici à reconstruire exactement cette heure
+    // dans le fuseau du téléphone/navigateur (France dans le projet actuel).
+    const wall=new Date(Date.UTC(1899,11,30)+value*86400000);
+    const local=new Date(
+      wall.getUTCFullYear(),
+      wall.getUTCMonth(),
+      wall.getUTCDate(),
+      wall.getUTCHours(),
+      wall.getUTCMinutes(),
+      wall.getUTCSeconds(),
+      wall.getUTCMilliseconds()
+    );
+    return Number.isFinite(local.valueOf()) ? local.valueOf() : 0;
+  }
+
+  const raw=String(value).trim();
+  if(!raw) return 0;
+
+  const d=new Date(raw);
+  if(Number.isFinite(d.valueOf())) return d.valueOf();
+
+  const n=Number(raw.replace(",","."));
+  if(Number.isFinite(n) && n>=1 && n<1000000){
+    return timestampMs(n);
+  }
+
+  return 0;
+};
+
 function demoSlots() {
   const base = new Date();
   base.setHours(0,0,0,0);
@@ -951,18 +986,41 @@ class ExcelDirectRepository {
       map.set(k,{...r});
     }
 
-    const sorted=[...pending].sort((a,b)=>
-      String(a.ModifiedAt||"").localeCompare(String(b.ModifiedAt||""))
-    );
+    // Plusieurs modifications peuvent être effectuées sur le même créneau.
+    // On ne garde visuellement que la dernière décision mobile.
+    const latestPending=new Map();
 
-    for(const r of sorted){
+    for(const r of pending){
       const k=`${norm(r.AgentCode)}|${String(r.CreneauId||"")}`;
-      map.set(k,{
-        ...map.get(k),
-        ...r,
-        Source:"APPLICATION",
-        Pending:true
-      });
+      const old=latestPending.get(k);
+      const currentTs=timestampMs(r.ModifiedAt);
+      const oldTs=old ? timestampMs(old.ModifiedAt) : -1;
+
+      if(!old || currentTs>=oldTs) latestPending.set(k,r);
+    }
+
+    for(const [k,r] of latestPending.entries()){
+      const existing=map.get(k);
+      const pendingTs=timestampMs(r.ModifiedAt);
+      const mirrorTs=timestampMs(existing?.ModifiedAt);
+
+      // Dernière modification connue = valeur affichée.
+      // Si Excel a été modifié après la saisie mobile, on n'affiche pas
+      // artificiellement une ancienne demande en attente par-dessus Excel.
+      if(existing && mirrorTs>0 && pendingTs>0 && mirrorTs>pendingTs){
+        map.set(k,{
+          ...existing,
+          PendingConflict:true,
+          PendingConflictReason:"EXCEL_PLUS_RECENT"
+        });
+      }else{
+        map.set(k,{
+          ...existing,
+          ...r,
+          Source:"APPLICATION",
+          Pending:true
+        });
+      }
     }
 
     return [...map.values()];
@@ -1053,17 +1111,32 @@ class ExcelDirectRepository {
   }
 
   async saveAvailability(payload){
-    await this.assertDesktopWritable();
+    // V2.5.3 :
+    // une disponibilité peut être saisie même lorsque le classeur est ouvert.
+    // On écrit UNIQUEMENT dans la file tblApp_Saisies ; le worker Cloud reste
+    // verrouillé et ne touche pas à Demande dispo tant que Desktop est actif.
+    let lock={locked:false};
+    try{ lock=await this.getDesktopEditLock(); }catch{}
+
     const row=this.submissionRow(payload);
+    if(lock.locked) row.StatutSync="EN_ATTENTE";
+
     await this.appendRows("submissions",[row]);
-    return row;
+    return {...row,Deferred:!!lock.locked};
   }
 
   async saveAvailabilityBatch(payloads){
-    await this.assertDesktopWritable();
-    const rows=payloads.map(p=>this.submissionRow(p));
+    let lock={locked:false};
+    try{ lock=await this.getDesktopEditLock(); }catch{}
+
+    const rows=payloads.map(p=>{
+      const row=this.submissionRow(p);
+      if(lock.locked) row.StatutSync="EN_ATTENTE";
+      return row;
+    });
+
     await this.appendRows("submissions",rows);
-    return rows;
+    return rows.map(r=>({...r,Deferred:!!lock.locked}));
   }
 
   async setLock(scope,date,bloc,locked,userEmail){

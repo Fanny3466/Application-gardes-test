@@ -632,7 +632,7 @@ async function saveSlotForAgent(agentCode,slotId,value,replCode,replName){
   try{
     const normalizedValue=value==="DISPO" ? "1" : value;
 
-    await state.repo.saveAvailability({
+    const saved=await state.repo.saveAvailability({
       AgentCode:target.Code,
       AgentNom:target.Title,
       CreneauId:String(slot.CreneauId||slot.id),
@@ -648,7 +648,16 @@ async function saveSlotForAgent(agentCode,slotId,value,replCode,replName){
     await refreshSyncBadge();
     renderAvailability();
     if(canManage()) renderChef();
-    toast(`Disponibilité enregistrée pour ${target.Title}`,"success");
+
+    if(saved?.Deferred){
+      toast(
+        `Disponibilité enregistrée pour ${target.Title}. Excel est ouvert : `+
+        `elle reste en attente et sera fusionnée à la prochaine synchronisation.`,
+        "success"
+      );
+    }else{
+      toast(`Disponibilité enregistrée pour ${target.Title}`,"success");
+    }
   }catch(err){
     console.error(err);toast(err.message,"error");
   }finally{busy(false)}
@@ -674,13 +683,23 @@ async function applyWholeBlockAvailable(){
       Valeur:"1",RemplacantCode:"",RemplacantNom:""
     }));
 
-    if(state.repo.saveAvailabilityBatch) await state.repo.saveAvailabilityBatch(payloads);
-    else for(const payload of payloads) await state.repo.saveAvailability(payload);
+    let savedRows=[];
+    if(state.repo.saveAvailabilityBatch) savedRows=await state.repo.saveAvailabilityBatch(payloads);
+    else{
+      for(const payload of payloads) savedRows.push(await state.repo.saveAvailability(payload));
+    }
     state.allAvailability=await state.repo.getAllAvailability();
     await refreshSyncBadge();
     renderAvailability();
     if(canManage()) renderChef();
-    toast(`Toute la plage est disponible pour ${state.selectedAgent.Title}`,"success");
+
+    const deferred=savedRows.some(x=>x?.Deferred);
+    toast(
+      deferred
+        ? `Plage enregistrée pour ${state.selectedAgent.Title}. Excel est ouvert : synchronisation différée.`
+        : `Toute la plage est disponible pour ${state.selectedAgent.Title}`,
+      "success"
+    );
   }catch(err){toast(err.message,"error")}
   finally{busy(false)}
 }
