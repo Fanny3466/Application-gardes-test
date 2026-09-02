@@ -1,12 +1,5 @@
-# Application Gardes V2.3.4 — Production Excel Direct
+# Application Gardes V3.0.0 — Sidecar
 
-Version de production connectée aux tables `tblApp_*` du classeur Excel.
+Cette version ne modifie plus directement le classeur Excel lors d’une saisie mobile. Les écritures passent par `ApplicationGardesSidecar/Inbox` sous forme de fichiers JSON uniques.
 
-Démarrage :
-1. déployer les fichiers ;
-2. ouvrir `setup.html` ;
-3. générer `production-config.js` ;
-4. remplacer le fichier à la racine ;
-5. tester puis ouvrir l'accès aux agents.
-
-Voir `docs/MISE_EN_PRODUCTION_V2_2.md`.
+**Ne pas remplacer `production-config.js` existant.** Les nouveaux chemins Sidecar disposent de valeurs par défaut.

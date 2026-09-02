@@ -12,18 +12,18 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="icon" href="assets/icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=2.5.3">
+  <link rel="stylesheet" href="styles.css?v=3.0.0">
   <script>
     window.addEventListener("error", function(e){
       var b=document.getElementById("bootFallback");
-      if(b){b.innerHTML='<div style="max-width:520px"><h2>Erreur de chargement</h2><p style="color:#667786">'+String(e.message||"Erreur JavaScript")+'</p><p style="font-size:12px;color:#8A98A3">Recharge la page après avoir remplacé les fichiers V2.5.3.</p></div>';}
+      if(b){b.innerHTML='<div style="max-width:520px"><h2>Erreur de chargement</h2><p style="color:#667786">'+String(e.message||"Erreur JavaScript")+'</p><p style="font-size:12px;color:#8A98A3">Recharge la page après avoir remplacé les fichiers V3.0.0.</p></div>';}
     });
   </script>
-  <script src="production-config.js?v=2.5.3" defer></script>
-  <script src="config.js?v=2.5.3" defer></script>
-  <script src="profile.js?v=2.5.3" defer></script>
-  <script src="repositories.js?v=2.5.3" defer></script>
-  <script src="app.js?v=2.5.3" defer></script>
+  <script src="production-config.js?v=3.0.0" defer></script>
+  <script src="config.js?v=3.0.0" defer></script>
+  <script src="profile.js?v=3.0.0" defer></script>
+  <script src="repositories.js?v=3.0.0" defer></script>
+  <script src="app.js?v=3.0.0" defer></script>
 </head>
 <body>
   <div id="bootFallback" style="position:fixed;inset:0;z-index:9999;display:grid;place-content:center;text-align:center;background:#F3F7FB;color:#17212B;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;padding:24px">
@@ -190,13 +190,13 @@
         <div class="help">
           <details open><summary>1 · Identification de l’agent</summary><p>En mode Microsoft 365, l’application recherche automatiquement l’adresse du compte connecté dans la liste <b>Agents</b>. L’agent ne voit alors que ses propres disponibilités.</p></details>
           <details><summary>2 · Saisir les disponibilités</summary><p>Choisis le jour puis la plage horaire. Touche chaque heure ou utilise <b>Toute la plage</b>. Les statuts correspondent aux valeurs reconnues par le classeur Excel.</p></details>
-          <details><summary>3 · Déclarer un remplaçant</summary><p>Choisis <b>Remplaçant</b>, puis la personne concernée. La saisie est envoyée dans <b>tblApp_Saisies</b> du classeur Excel, puis le module VBA la reprend dans <b>Demande dispo</b>.</p></details>
+          <details><summary>3 · Déclarer un remplaçant</summary><p>Choisis <b>Remplaçant</b>, puis la personne concernée. La saisie est écrite dans la <b>file Sidecar</b> sous forme d’un petit fichier JSON indépendant. Excel Desktop ou Power Automate l’applique ensuite sans écriture concurrente dans le classeur.</p></details>
           <details><summary>4 · Feuille de garde</summary><p>La vue <b>Garde</b> lit les affectations publiées par le classeur. Les postes non pourvus restent visibles si l’option correspondante est activée.</p></details>
           <details><summary>5 · Chef / Admin : corrections directes</summary><p>Les rôles <b>CHEF</b> et <b>ADMIN</b> peuvent toucher une cellule de la matrice pour corriger la disponibilité d'un agent. Dans <b>Garde</b>, ils peuvent aussi changer directement la personne affectée à chaque piquet. Les modifications sont envoyées au classeur Excel et reprises au prochain cycle de synchronisation.</p></details>
           <details><summary>6 · Installer sur iPhone</summary><p>Ouvre l’application dans Safari → <b>Partager</b> → <b>Sur l’écran d’accueil</b>. Le bandeau d’installation disparaît automatiquement lorsque l’application est déjà ouverte en mode autonome.</p></details>
           <details><summary>7 · Licence et propriété intellectuelle</summary><p><b>Application Gardes est diffusée comme logiciel propriétaire.</b> L’utilisation d’une instance de production doit être couverte par une licence écrite définissant le client, les centres autorisés, les utilisateurs, la durée, la maintenance et les droits concédés. La copie, redistribution ou sous-licence hors contrat est interdite sous réserve des exceptions légales impératives. Une copie de sauvegarde nécessaire à l’utilisation reste notamment encadrée par la loi.</p></details>
           <details><summary>8 · Données personnelles / RGPD</summary><p>Une instance de production traite des identités professionnelles, rôles, disponibilités et journaux techniques. Le contrat de déploiement doit identifier le responsable de traitement et, le cas échéant, le sous-traitant, préciser les finalités, la durée de conservation, les mesures de sécurité, la localisation des données et la procédure de gestion des incidents.</p></details>
-          <details><summary>9 · Chaîne de synchronisation</summary><ol><li>iPhone → <b>tblApp_Saisies</b> dans le fichier Excel.</li><li>Excel Desktop détecte la nouvelle saisie.</li><li>VBA → <b>Demande dispo</b> puis <b>Remplir_Feuille_Gardes_En_W</b>.</li><li><b>Mois complet (Diffusion)</b> → <b>tblApp_Affectations</b>.</li><li>L’application relit directement le résultat via Microsoft Graph.</li></ol></details>
+          <details><summary>9 · Chaîne de synchronisation Sidecar V3</summary><ol><li>iPhone → fichier JSON unique dans <b>ApplicationGardesSidecar/Inbox</b>.</li><li>Si Excel Desktop est ouvert, le listener VBA local traite le fichier et le déplace dans <b>Processed</b>.</li><li>Si Excel est fermé, Power Automate traite le même événement dans le Cloud.</li><li>L’application relit le classeur uniquement en lecture via Microsoft Graph.</li><li>Aucune saisie mobile n’écrit directement dans le .xlsm.</li></ol></details>
         </div>
       </section>
     </main>

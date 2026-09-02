@@ -3,7 +3,7 @@
 const PROD = window.GARDES_PRODUCTION || {};
 
 window.GARDES_CONFIG = {
-  version: "2.5.3",
+  version: "3.0.0",
   appName: "Application Gardes",
   environment: "PRODUCTION",
   mode: "excel-direct",
@@ -61,6 +61,15 @@ window.GARDES_CONFIG = {
     statusTable: "tblApp_CloudStatus",
     staleAfterMinutes: 5
   },
+
+  sidecar: {
+    enabled: true,
+    inboxPath: PROD.sidecarInboxPath || "ApplicationGardesSidecar/Inbox",
+    processedPath: PROD.sidecarProcessedPath || "ApplicationGardesSidecar/Processed",
+    errorPath: PROD.sidecarErrorPath || "ApplicationGardesSidecar/Error",
+    locksPath: PROD.sidecarLocksPath || "ApplicationGardesSidecar/Locks"
+  },
+
 
   roles: {
     chefAdjointEmails: [],

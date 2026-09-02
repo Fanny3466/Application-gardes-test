@@ -699,6 +699,85 @@ class ExcelDirectRepository {
     throw lastError || new Error("Erreur Microsoft Graph.");
   }
 
+  encodeDrivePath(path){
+    return String(path||"").split("/").filter(Boolean).map(encodeURIComponent).join("/");
+  }
+
+  async graphRaw(path,{method="GET",body=null,headers={}}={}){
+    const token=await this.token();
+    const response=await fetch(
+      path.startsWith("https://") ? path : `https://graph.microsoft.com/v1.0${path}`,
+      {
+        method,
+        headers:{Authorization:`Bearer ${token}`,Accept:"application/json",...headers},
+        body,
+        cache:"no-store"
+      }
+    );
+    if(!response.ok){
+      const detail=await response.text();
+      throw new Error(`Microsoft Graph ${response.status} : ${detail.slice(0,1200)}`);
+    }
+    if(response.status===204) return null;
+    const ct=response.headers.get("content-type")||"";
+    return ct.includes("application/json") ? response.json() : response.text();
+  }
+
+  sidecarInboxPath(){
+    return String(G.sidecar?.inboxPath||"ApplicationGardesSidecar/Inbox").replace(/^\/+|\/+$/g,"");
+  }
+
+  localSidecarKey(){ return "ApplicationGardes.SidecarPending.V3"; }
+
+  loadLocalSidecarEvents(){
+    try{
+      const v=JSON.parse(localStorage.getItem(this.localSidecarKey())||"[]");
+      const min=Date.now()-24*60*60*1000;
+      return Array.isArray(v) ? v.filter(e=>new Date(e.createdAtUtc||0).valueOf()>=min) : [];
+    }catch{return [];}
+  }
+
+  storeLocalSidecarEvent(evt){
+    const items=this.loadLocalSidecarEvents();
+    items.push(evt);
+    try{localStorage.setItem(this.localSidecarKey(),JSON.stringify(items.slice(-300)));}catch{}
+  }
+
+  async writeSidecarEvent(type,payload){
+    const eventId=`EVT-${Date.now()}-${Math.random().toString(16).slice(2,10)}`;
+    const evt={
+      schemaVersion:3,
+      eventId,
+      type,
+      createdAtUtc:new Date().toISOString(),
+      createdBy:this.account?.username||"",
+      source:"APPLICATION",
+      payload:{...(payload||{})}
+    };
+    const filename=`${eventId}.json`;
+    const path=this.encodeDrivePath(`${this.sidecarInboxPath()}/${filename}`);
+    await this.graphRaw(`/drives/${encodeURIComponent(this.driveId)}/root:/${path}:/content`,{
+      method:"PUT",
+      body:JSON.stringify(evt),
+      headers:{"Content-Type":"application/json; charset=utf-8"}
+    });
+    this.storeLocalSidecarEvent(evt);
+    return evt;
+  }
+
+  localAvailabilityPending(){
+    return this.loadLocalSidecarEvents()
+      .filter(e=>e.type==="AVAILABILITY_SET")
+      .map(e=>({
+        ...(e.payload||{}),
+        ID:e.eventId,
+        Source:"APPLICATION-SIDECAR",
+        StatutSync:"SIDECAR",
+        ModifiedAt:e.createdAtUtc,
+        Pending:true
+      }));
+  }
+
   workbookBase(){
     return `/drives/${encodeURIComponent(this.driveId)}/items/${encodeURIComponent(this.itemId)}/workbook`;
   }
@@ -710,7 +789,7 @@ class ExcelDirectRepository {
     try{
       const r=await this.graph(`${this.workbookBase()}/createSession`,{
         method:"POST",
-        body:{persistChanges:true}
+        body:{persistChanges:false}
       });
       this.sessionId=r?.id||"";
     }catch(err){
@@ -948,11 +1027,15 @@ class ExcelDirectRepository {
   async getJournal(){ return this.tableObjects("journal",true); }
 
   async getPendingSubmissions(){
-    const rows=await this.tableObjects("submissions",true);
-    return rows.filter(r=>{
-      const s=norm(r.StatutSync);
-      return ["A_IMPORTER","EN_ATTENTE"].includes(s);
-    });
+    let legacy=[];
+    try{
+      const rows=await this.tableObjects("submissions",true);
+      legacy=rows.filter(r=>{
+        const s=norm(r.StatutSync);
+        return ["A_IMPORTER","EN_ATTENTE"].includes(s);
+      });
+    }catch{}
+    return [...legacy,...this.localAvailabilityPending()];
   }
 
   async getPendingCommands(){
@@ -1111,141 +1194,61 @@ class ExcelDirectRepository {
   }
 
   async saveAvailability(payload){
-    // V2.5.3 :
-    // une disponibilité peut être saisie même lorsque le classeur est ouvert.
-    // On écrit UNIQUEMENT dans la file tblApp_Saisies ; le worker Cloud reste
-    // verrouillé et ne touche pas à Demande dispo tant que Desktop est actif.
-    let lock={locked:false};
-    try{ lock=await this.getDesktopEditLock(); }catch{}
-
-    const row=this.submissionRow(payload);
-    if(lock.locked) row.StatutSync="EN_ATTENTE";
-
-    await this.appendRows("submissions",[row]);
-    return {...row,Deferred:!!lock.locked};
+    const evt=await this.writeSidecarEvent("AVAILABILITY_SET",payload);
+    return {
+      ...payload,
+      ID:evt.eventId,
+      ModifiedAt:evt.createdAtUtc,
+      Source:"APPLICATION-SIDECAR",
+      StatutSync:"SIDECAR",
+      Deferred:false,
+      Sidecar:true
+    };
   }
 
   async saveAvailabilityBatch(payloads){
-    let lock={locked:false};
-    try{ lock=await this.getDesktopEditLock(); }catch{}
-
-    const rows=payloads.map(p=>{
-      const row=this.submissionRow(p);
-      if(lock.locked) row.StatutSync="EN_ATTENTE";
-      return row;
-    });
-
-    await this.appendRows("submissions",rows);
-    return rows.map(r=>({...r,Deferred:!!lock.locked}));
+    const rows=[];
+    // Séquentiel : évite une rafale de requêtes Graph simultanées.
+    for(const p of payloads||[]) rows.push(await this.saveAvailability(p));
+    return rows;
   }
 
   async setLock(scope,date,bloc,locked,userEmail){
-    await this.assertDesktopWritable();
-    const rows=await this.tableObjects("locks",true);
-    const id=`${scope}|${date}|${bloc}`;
-    const existing=rows.find(x=>String(x.ID||"")===id);
-
-    const row={
-      ...(existing||{}),
-      ID:id,
-      Scope:scope,
-      Date:date,
-      Bloc:bloc,
-      Locked:!!locked,
-      LockedBy:userEmail||"",
-      LockedAt:new Date().toISOString(),
-      StatutSync:"A_APPLIQUER"
-    };
-
-    if(existing){
-      await this.patchTableFieldsViaWorksheet("locks",existing.__index,{
-        Scope:row.Scope,
-        Date:row.Date,
-        Bloc:row.Bloc,
-        Locked:row.Locked,
-        LockedBy:row.LockedBy,
-        LockedAt:row.LockedAt,
-        StatutSync:row.StatutSync
-      });
-    }else await this.appendRows("locks",[row]);
-
-    return row;
+    const evt=await this.writeSidecarEvent("LOCK_SET",{
+      Scope:scope,Date:date,Bloc:bloc,Locked:!!locked
+    });
+    return {ID:evt.eventId,Scope:scope,Date:date,Bloc:bloc,Locked:!!locked,LockedBy:userEmail||"",Sidecar:true};
   }
 
   async addCommand(command,date="",bloc="",userEmail="",message=""){
-    await this.assertDesktopWritable();
-    const row={
-      ID:`CMD-${Date.now()}-${Math.random().toString(16).slice(2,8)}`,
-      Commande:command,
-      DateGarde:date,
-      Bloc:bloc,
-      DemandePar:userEmail||"",
-      DemandeAt:new Date().toISOString(),
-      Statut:"A_TRAITER",
-      TraiteAt:"",
-      Message:message||""
-    };
-    await this.appendRows("commands",[row]);
-    return row;
+    const evt=await this.writeSidecarEvent("COMMAND",{
+      Commande:command,DateGarde:date,Bloc:bloc,Message:message||""
+    });
+    return {ID:evt.eventId,Commande:command,DateGarde:date,Bloc:bloc,Sidecar:true};
   }
 
   async saveAssignmentChange(payload){
-    const clean=v=>String(v??"").replace(/[|\r\n]/g," ").trim();
-    const message=[
-      `PIQUET=${clean(payload.Piquet)}`,
-      `ROLE=${clean(payload.Role)}`,
-      `AGENTCODE=${clean(payload.AgentCode)}`,
-      `AGENTNOM=${clean(payload.AgentNom)}`
-    ].join("|");
-
-    return this.addCommand(
-      "MODIFIER_AFFECTATION",
-      payload.DateGarde||"",
-      payload.Bloc||"",
-      this.account?.username||"",
-      message
-    );
+    const evt=await this.writeSidecarEvent("ASSIGNMENT_SET",payload);
+    return {...payload,ID:evt.eventId,ModifiedAt:evt.createdAtUtc,Sidecar:true};
   }
 
   async publish(type,data,userEmail){
-    await this.assertDesktopWritable();
-    const row={
-      ID:`PUB-${Date.now()}-${Math.random().toString(16).slice(2,7)}`,
+    const evt=await this.writeSidecarEvent("PUBLISH",{
       Type:type,
       DateDebut:data.dateDebut||"",
       DateFin:data.dateFin||"",
-      Bloc:data.bloc||"",
-      Version:String(Date.now()),
-      PubliePar:userEmail||"",
-      PublishedAt:new Date().toISOString(),
-      Gele:true,
-      Statut:"DEMANDEE"
-    };
-
-    await this.appendRows("publications",[row]);
-    await this.addCommand("PUBLIER_GARDE",data.dateDebut||"",data.bloc||"",userEmail||"");
-    return row;
+      DateGarde:data.dateDebut||"",
+      Bloc:data.bloc||""
+    });
+    return {ID:evt.eventId,Type:type,...data,PubliePar:userEmail||"",Sidecar:true};
   }
 
   async saveAgentAccess(agentCode,payload){
-    await this.assertDesktopWritable();
-    const rows=await this.tableObjects("agents",true);
-    const existing=rows.find(x=>norm(x.Code)===norm(agentCode));
-    if(!existing) throw new Error("Agent introuvable dans tblApp_Agents.");
-
-    const row={...existing};
-    if(Object.prototype.hasOwnProperty.call(payload,"Email")) row.Email=payload.Email||"";
-    if(Object.prototype.hasOwnProperty.call(payload,"Role")) row.Role=(payload.Role||"AGENT").toUpperCase();
-    if(Object.prototype.hasOwnProperty.call(payload,"Actif")) row.Actif=payload.Actif;
-
-    const fields={};
-    if(Object.prototype.hasOwnProperty.call(payload,"Email")) fields.Email=row.Email;
-    if(Object.prototype.hasOwnProperty.call(payload,"Role")) fields.Role=row.Role;
-    if(Object.prototype.hasOwnProperty.call(payload,"Actif")) fields.Actif=row.Actif;
-
-    await this.patchTableFieldsViaWorksheet("agents",existing.__index,fields);
-    this.tableCache.delete("agents");
-    return row;
+    const evt=await this.writeSidecarEvent("AGENT_ACCESS_SET",{
+      AgentCode:agentCode,
+      ...(payload||{})
+    });
+    return {AgentCode:agentCode,...payload,ID:evt.eventId,Sidecar:true};
   }
 
   async getCloudStatus(){
